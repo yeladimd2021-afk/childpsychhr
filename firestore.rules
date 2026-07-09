@@ -1,0 +1,97 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isActiveUser() {
+      return isSignedIn() && userDoc().data.active == true;
+    }
+
+    function role() {
+      return userDoc().data.role;
+    }
+
+    function isAdmin() {
+      return isActiveUser() && role() == 'admin';
+    }
+
+    function canEdit() {
+      return isActiveUser() && (role() == 'admin' || role() == 'editor');
+    }
+
+    match /users/{uid} {
+      allow read: if isActiveUser();
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == uid && request.resource.data.role == resource.data.role && request.resource.data.active == resource.data.active);
+      allow delete: if false;
+    }
+
+    match /positions/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /employees/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /assignments/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /units/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /budgetItems/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /futureChanges/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /vacancyReviews/{id} {
+      allow read: if isActiveUser();
+      allow create, update: if canEdit();
+      allow delete: if false;
+    }
+
+    match /auditLog/{id} {
+      allow read: if isActiveUser();
+      allow create: if canEdit();
+      allow update, delete: if false;
+    }
+
+    // Singleton doc holding the Control Center's configurable thresholds. Any active user may
+    // trigger the one-time auto-seed with the hardcoded defaults (whoever opens the Control
+    // Center first after a fresh deploy, before an admin has ever visited /settings) — but only
+    // an admin may actually change the values afterward, since Firestore rules distinguish
+    // "create" (doc didn't exist yet) from "update" (doc already exists).
+    match /systemSettings/{id} {
+      allow read: if isActiveUser();
+      allow create: if isActiveUser();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+  }
+}

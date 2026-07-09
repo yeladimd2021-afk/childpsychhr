@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Firebase service account keys (used only by scripts/bootstrap-admin.mjs) — never commit these
+serviceAccountKey.json
+*serviceAccount*.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
