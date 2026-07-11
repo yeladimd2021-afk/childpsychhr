@@ -65,10 +65,10 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <div className="mb-4 flex items-center gap-3">
-          <Logo size={44} />
+        <div className="mb-4 flex flex-col items-center gap-3 text-center">
+          <Logo className="w-[200px] sm:w-[240px]" />
           <div>
-            <h1 dir="ltr" className="text-right text-xl font-bold text-brand-blue">{APP_NAME}</h1>
+            <h1 className="text-xl font-bold text-brand-blue">{APP_NAME}</h1>
             <p className="text-sm text-foreground-subtle">{APP_SUBTITLE}</p>
             <p className="text-sm text-foreground-subtle">{APP_DEPARTMENT}</p>
           </div>

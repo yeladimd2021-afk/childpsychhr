@@ -21,7 +21,7 @@ export default function AboutPage() {
     <div className="flex flex-col gap-4 p-6 md:p-8">
       <Card>
         <div className="flex flex-wrap items-center gap-4">
-          <Logo variant="full" size={72} />
+          <Logo className="w-[220px] sm:w-[250px] lg:w-[280px]" />
           <div>
             <h1 dir="ltr" className="text-right text-2xl font-bold text-brand-blue">{APP_NAME}</h1>
             <p className="text-sm text-foreground-subtle">{APP_SUBTITLE}</p>

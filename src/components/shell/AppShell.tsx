@@ -53,24 +53,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col md:flex-row">
       {menuOpen && (
         <aside className="fixed inset-0 z-40 flex flex-col overflow-y-auto border-l border-border bg-surface md:sticky md:inset-auto md:top-0 md:z-auto md:h-screen md:w-64">
-          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
-            <div className="flex min-w-0 items-center gap-3">
-              <Logo size={36} />
-              <div className="min-w-0">
-                <p dir="ltr" className="truncate text-right text-sm font-bold text-brand-blue">
-                  {APP_NAME}
-                </p>
-                <p className="truncate text-xs text-foreground-subtle">{APP_SUBTITLE}</p>
-                <p className="truncate text-xs text-foreground-subtle">{APP_DEPARTMENT}</p>
-              </div>
+          <div className="border-b border-border px-4 py-4">
+            <div className="flex items-center justify-between gap-2">
+              <Logo className="w-[150px] sm:w-[190px] lg:w-[210px]" />
+              <button
+                onClick={() => setMenuOpen(false)}
+                aria-label="סגירת תפריט"
+                className="shrink-0 rounded-lg p-1.5 hover:bg-brand-blue-soft"
+              >
+                <Menu size={18} />
+              </button>
             </div>
-            <button
-              onClick={() => setMenuOpen(false)}
-              aria-label="סגירת תפריט"
-              className="shrink-0 rounded-lg p-1.5 hover:bg-brand-blue-soft"
-            >
-              <Menu size={18} />
-            </button>
+            <div className="mt-3 min-w-0">
+              <p dir="ltr" className="truncate text-right text-sm font-bold text-brand-blue">
+                {APP_NAME}
+              </p>
+              <p className="truncate text-xs text-foreground-subtle">{APP_SUBTITLE}</p>
+              <p className="truncate text-xs text-foreground-subtle">{APP_DEPARTMENT}</p>
+            </div>
           </div>
           <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
             {NAV_ITEMS.map((item) => {
