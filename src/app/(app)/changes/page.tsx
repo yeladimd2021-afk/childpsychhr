@@ -2,14 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Check } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
-import { useFutureChangesQuery } from "@/lib/queries/useFutureChanges";
+import {
+  useFutureChangesQuery,
+  useUpdateFutureChangeMutation,
+} from "@/lib/queries/useFutureChanges";
+import { usePositionsQuery } from "@/lib/queries/usePositions";
+import { useUnitsQuery } from "@/lib/queries/useUnits";
 import { FutureChangeFormModal } from "@/components/changes/FutureChangeFormModal";
-import type { FutureChange } from "@/lib/schemas/futureChange";
+import type { FutureChange, FutureChangeFormValues } from "@/lib/schemas/futureChange";
 
 const STATUS_TONE = {
   מתוכנן: "blue",
@@ -28,6 +33,9 @@ export default function ChangesPage() {
   const { profile } = useAuth();
   const editAllowed = canEdit(profile?.role);
   const { data: changes = [], isLoading } = useFutureChangesQuery();
+  const { data: positions = [] } = usePositionsQuery();
+  const { data: units = [] } = useUnitsQuery();
+  const updateMutation = useUpdateFutureChangeMutation();
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editing, setEditing] = useState<FutureChange | null>(null);
@@ -75,6 +83,23 @@ export default function ChangesPage() {
   }, [filtered]);
 
   const undated = filtered.filter((c) => !c.effectiveDate);
+
+  async function handleMarkDone(change: FutureChange) {
+    const values: FutureChangeFormValues = {
+      firstName: change.firstName,
+      lastName: change.lastName,
+      employmentPercent: change.employmentPercent,
+      effectiveDate: change.effectiveDate,
+      effectiveDateText: change.effectiveDateText,
+      fundingSource: change.fundingSource,
+      positionRef: change.positionRef,
+      changeType: change.changeType,
+      status: "בוצע",
+      relatedPositionId: change.relatedPositionId,
+      notes: change.notes,
+    };
+    await updateMutation.mutateAsync({ id: change.id, before: change, values });
+  }
 
   if (isLoading) return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
 
@@ -160,7 +185,12 @@ export default function ChangesPage() {
               <p className="mb-2 text-sm font-semibold text-brand-blue">{month}</p>
               <div className="flex flex-col gap-2">
                 {items.map((c) => (
-                  <ChangeRow key={c.id} change={c} onEdit={() => setEditing(c)} />
+                  <ChangeRow
+                    key={c.id}
+                    change={c}
+                    onEdit={() => setEditing(c)}
+                    onMarkDone={editAllowed ? () => handleMarkDone(c) : undefined}
+                  />
                 ))}
               </div>
             </div>
@@ -173,18 +203,30 @@ export default function ChangesPage() {
           <h2 className="mb-4 font-medium">ללא תאריך</h2>
           <div className="flex flex-col gap-2">
             {undated.map((c) => (
-              <ChangeRow key={c.id} change={c} onEdit={() => setEditing(c)} />
+              <ChangeRow
+                key={c.id}
+                change={c}
+                onEdit={() => setEditing(c)}
+                onMarkDone={editAllowed ? () => handleMarkDone(c) : undefined}
+              />
             ))}
           </div>
         </Card>
       )}
 
       {showCreateModal && (
-        <FutureChangeFormModal change={null} onClose={() => setShowCreateModal(false)} />
+        <FutureChangeFormModal
+          change={null}
+          positions={positions}
+          units={units}
+          onClose={() => setShowCreateModal(false)}
+        />
       )}
       {editing && (
         <FutureChangeFormModal
           change={editing}
+          positions={positions}
+          units={units}
           onClose={() => setEditing(null)}
           readOnly={!editAllowed}
         />
@@ -193,7 +235,15 @@ export default function ChangesPage() {
   );
 }
 
-function ChangeRow({ change, onEdit }: { change: FutureChange; onEdit: () => void }) {
+function ChangeRow({
+  change,
+  onEdit,
+  onMarkDone,
+}: {
+  change: FutureChange;
+  onEdit: () => void;
+  onMarkDone?: () => void;
+}) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm">
       <div>
@@ -211,9 +261,20 @@ function ChangeRow({ change, onEdit }: { change: FutureChange; onEdit: () => voi
       <div className="flex items-center gap-2">
         <Badge tone={TYPE_TONE[change.changeType]}>{change.changeType}</Badge>
         <Badge tone={STATUS_TONE[change.status]}>{change.status}</Badge>
+        {onMarkDone && change.status !== "בוצע" && (
+          <button
+            onClick={onMarkDone}
+            aria-label="סמן כבוצע"
+            title="סמן כבוצע"
+            className="rounded-lg p-1.5 text-brand-green hover:bg-brand-green-soft"
+          >
+            <Check size={16} />
+          </button>
+        )}
         <button
           onClick={onEdit}
           aria-label="עריכה"
+          title="עריכה"
           className="rounded-lg p-1.5 text-foreground-subtle hover:bg-surface"
         >
           <Pencil size={16} />

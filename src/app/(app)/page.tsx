@@ -38,7 +38,17 @@ import {
 import { computeCriticalAlerts } from "@/lib/domain/criticalAlerts";
 import { computeTrends } from "@/lib/domain/trends";
 import { computeInsights } from "@/lib/domain/insights";
+import { ACTION_LABELS } from "@/lib/domain/auditFieldLabels";
 import type { FutureChange } from "@/lib/schemas/futureChange";
+
+/** Thicker colored border so the two "something needs attention" sections visibly outrank the
+ * purely-informational ones (KPIs, quick actions, recent activity, insights) when they actually
+ * have something to show — an empty queue stays visually quiet. */
+const ATTENTION_BORDER: Record<"red" | "orange" | "yellow", string> = {
+  red: "border-2 border-brand-red",
+  orange: "border-2 border-brand-amber",
+  yellow: "border-2 border-brand-amber",
+};
 
 const SEVERITY_DOT: Record<ActionSeverity, string> = {
   red: "bg-brand-red",
@@ -207,6 +217,14 @@ export default function ControlCenterPage() {
       });
   }, [futureChanges, settings, now]);
 
+  const actionQueueSeverity = actionQueue.some((i) => i.severity === "red")
+    ? "red"
+    : actionQueue.some((i) => i.severity === "orange")
+      ? "orange"
+      : actionQueue.length > 0
+        ? "yellow"
+        : null;
+
   const recentlyCompleted = useMemo(() => {
     return recentAuditEntries
       .filter(
@@ -233,7 +251,7 @@ export default function ControlCenterPage() {
       </div>
 
       {/* 1. Action Queue */}
-      <Card>
+      <Card className={actionQueueSeverity ? ATTENTION_BORDER[actionQueueSeverity] : ""}>
         <h2 className="mb-4 flex items-center gap-2 font-medium">
           <ListChecks size={18} className="text-brand-blue" />
           משימות הדורשות טיפול
@@ -303,7 +321,7 @@ export default function ControlCenterPage() {
       </Card>
 
       {/* 3. Critical Alerts */}
-      <Card>
+      <Card className={criticalAlerts.length > 0 ? "border-2 border-brand-red" : ""}>
         <h2 className="mb-4 flex items-center gap-2 font-medium">
           <AlertOctagon size={18} className="text-brand-red" />
           התראות קריטיות
@@ -421,7 +439,10 @@ export default function ControlCenterPage() {
           <div className="flex flex-col gap-2">
             {recentlyCompleted.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between text-sm">
-                <span>{entry.entityLabel}</span>
+                <span>
+                  {entry.entityLabel}
+                  <span className="text-foreground-subtle"> · {ACTION_LABELS[entry.action] ?? entry.action}</span>
+                </span>
                 <span className="text-xs text-foreground-subtle">
                   {new Date(entry.changedAt).toLocaleString("he-IL")}
                 </span>

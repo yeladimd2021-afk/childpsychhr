@@ -4,6 +4,7 @@ const TONE_CLASSES = {
   green: "text-brand-green bg-brand-green-soft",
   amber: "text-brand-amber bg-brand-amber-soft",
   red: "text-brand-red bg-brand-red-soft",
+  pink: "text-brand-pink bg-brand-pink-soft",
   neutral: "text-foreground-subtle bg-background",
 } as const;
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,9 +17,13 @@ import {
   Menu,
   LogOut,
   BarChart3,
+  DatabaseBackup,
+  Info,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit, canManageUsers, ROLE_LABELS } from "@/lib/auth/permissions";
+import { Logo } from "@/components/ui/Logo";
+import { APP_DEPARTMENT, APP_NAME, APP_SUBTITLE, APP_VERSION } from "@/lib/branding";
 
 const NAV_ITEMS = [
   { href: "/", label: "מרכז שליטה ניהולי", icon: LayoutGrid },
@@ -37,19 +41,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { profile, signOutUser, isDemoMode } = useAuth();
 
+  useEffect(() => {
+    // Default the menu closed on phone-width screens so the first thing a user sees is the
+    // actual page, not 11 nav links they have to scroll past or discover a tiny close button
+    // for — desktop keeps its open-by-default behavior untouched.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (window.matchMedia("(max-width: 767px)").matches) setMenuOpen(false);
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       {menuOpen && (
-        <aside className="flex flex-col border-l border-border bg-surface md:sticky md:top-0 md:h-screen md:w-64">
-          <div className="flex items-center justify-between border-b border-border px-4 py-4">
-            <div>
-              <p className="text-sm font-semibold text-foreground">מערכת תקנים</p>
-              <p className="text-xs text-foreground-subtle">אגף פסיכיאטריה ילדים ונוער</p>
+        <aside className="fixed inset-0 z-40 flex flex-col overflow-y-auto border-l border-border bg-surface md:sticky md:inset-auto md:top-0 md:z-auto md:h-screen md:w-64">
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <Logo size={36} />
+              <div className="min-w-0">
+                <p dir="ltr" className="truncate text-right text-sm font-bold text-brand-blue">
+                  {APP_NAME}
+                </p>
+                <p className="truncate text-xs text-foreground-subtle">{APP_SUBTITLE}</p>
+                <p className="truncate text-xs text-foreground-subtle">{APP_DEPARTMENT}</p>
+              </div>
             </div>
             <button
               onClick={() => setMenuOpen(false)}
               aria-label="סגירת תפריט"
-              className="rounded-lg p-1.5 hover:bg-brand-blue-soft"
+              className="shrink-0 rounded-lg p-1.5 hover:bg-brand-blue-soft"
             >
               <Menu size={18} />
             </button>
@@ -112,6 +130,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 הגדרות מערכת
               </Link>
             )}
+            {canManageUsers(profile?.role) && (
+              <Link
+                href="/backup"
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                  pathname.startsWith("/backup")
+                    ? "bg-brand-blue-soft text-brand-blue"
+                    : "text-foreground-subtle hover:bg-background"
+                }`}
+              >
+                <DatabaseBackup size={18} />
+                גיבוי ושחזור
+              </Link>
+            )}
+            <Link
+              href="/about"
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                pathname.startsWith("/about")
+                  ? "bg-brand-blue-soft text-brand-blue"
+                  : "text-foreground-subtle hover:bg-background"
+              }`}
+            >
+              <Info size={18} />
+              אודות המערכת
+            </Link>
           </nav>
           <div className="border-t border-border p-3">
             <div className="mb-2 rounded-lg bg-background px-3 py-2">
@@ -127,6 +169,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <LogOut size={18} />
               התנתקות
             </button>
+            <p className="mt-2 text-center text-xs text-foreground-subtle">
+              {APP_NAME} <span className="font-semibold text-brand-pink">{APP_VERSION}</span>
+            </p>
           </div>
         </aside>
       )}

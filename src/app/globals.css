@@ -7,8 +7,11 @@
   --foreground-subtle: #5b6b82;
   --border: #e2e8f0;
 
-  --brand-blue: #2563eb;
-  --brand-blue-soft: #eaf1fe;
+  /* Primary brand color — the navy from the official שיבא לוגו wordmark (sampled: #282f5a).
+     Used for primary actions, links and active nav state; keeps the class name "brand-blue"
+     for backward compatibility across the codebase even though the value is now navy. */
+  --brand-blue: #282f5a;
+  --brand-blue-soft: #eceef5;
   --brand-turquoise: #0d9488;
   --brand-turquoise-soft: #e6f7f5;
   --brand-green: #16a34a;
@@ -17,6 +20,10 @@
   --brand-amber-soft: #fdf3e2;
   --brand-red: #dc2626;
   --brand-red-soft: #fce9e8;
+  /* Accent — the pink from the logo's circular mark. Used sparingly and deliberately (version
+     tag, one small accent detail) rather than repainted across the UI. */
+  --brand-pink: #dd4580;
+  --brand-pink-soft: #fceaf1;
 }
 
 @theme inline {
@@ -36,6 +43,8 @@
   --color-brand-amber-soft: var(--brand-amber-soft);
   --color-brand-red: var(--brand-red);
   --color-brand-red-soft: var(--brand-red-soft);
+  --color-brand-pink: var(--brand-pink);
+  --color-brand-pink-soft: var(--brand-pink-soft);
 
   --font-sans: var(--font-heebo);
 }

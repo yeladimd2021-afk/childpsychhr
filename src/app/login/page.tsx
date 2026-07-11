@@ -4,18 +4,26 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { FirebaseError } from "firebase/app";
+import { Logo } from "@/components/ui/Logo";
+import { APP_DEPARTMENT, APP_NAME, APP_SUBTITLE } from "@/lib/branding";
 
 function authErrorMessage(error: unknown) {
   if (error instanceof FirebaseError) {
     switch (error.code) {
       case "auth/invalid-credential":
-      case "auth/wrong-password":
+        return "מייל או סיסמה שגויים";
       case "auth/user-not-found":
-        return "פרטי התחברות שגויים";
+        return "משתמש לא קיים";
+      case "auth/wrong-password":
+        return "סיסמה שגויה";
+      case "auth/invalid-email":
+        return "כתובת מייל לא תקינה";
+      case "auth/api-key-not-valid":
+        return "בעיה בהגדרות Firebase";
+      case "auth/operation-not-allowed":
+        return "התחברות באמצעות Email/Password לא מופעלת";
       case "auth/too-many-requests":
         return "יותר מדי ניסיונות התחברות — נסה/י שוב מאוחר יותר";
-      case "auth/invalid-email":
-        return "כתובת ההתחברות אינה תקינה";
       default:
         return "אירעה שגיאה בהתחברות";
     }
@@ -45,6 +53,9 @@ export default function LoginPage() {
       await signIn(email, password);
       router.push("/");
     } catch (err) {
+      if (process.env.NODE_ENV === "development" && err instanceof FirebaseError) {
+        console.error("Firebase auth error:", err.code, err.message);
+      }
       setError(authErrorMessage(err));
     } finally {
       setSubmitting(false);
@@ -54,10 +65,14 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 shadow-sm">
-        <h1 className="text-xl font-semibold text-foreground">מערכת תקנים</h1>
-        <p className="mt-1 text-sm text-foreground-subtle">
-          אגף פסיכיאטריה ילדים ונוער
-        </p>
+        <div className="mb-4 flex items-center gap-3">
+          <Logo size={44} />
+          <div>
+            <h1 dir="ltr" className="text-right text-xl font-bold text-brand-blue">{APP_NAME}</h1>
+            <p className="text-sm text-foreground-subtle">{APP_SUBTITLE}</p>
+            <p className="text-sm text-foreground-subtle">{APP_DEPARTMENT}</p>
+          </div>
+        </div>
         <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium">

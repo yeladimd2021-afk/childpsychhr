@@ -12,6 +12,8 @@ import {
   useCreateFutureChangeMutation,
   useUpdateFutureChangeMutation,
 } from "@/lib/queries/useFutureChanges";
+import type { Position } from "@/lib/schemas/position";
+import type { Unit } from "@/lib/schemas/unit";
 
 function toDateInputValue(ts: number | null) {
   if (!ts) return "";
@@ -24,13 +26,18 @@ function toPercentInputValue(v: number | null) {
 
 export function FutureChangeFormModal({
   change,
+  positions,
+  units,
   onClose,
   readOnly = false,
 }: {
   change: FutureChange | null;
+  positions: Position[];
+  units: Unit[];
   onClose: () => void;
   readOnly?: boolean;
 }) {
+  const unitNameById = new Map(units.map((u) => [u.id, u.name]));
   const createMutation = useCreateFutureChangeMutation();
   const updateMutation = useUpdateFutureChangeMutation();
 
@@ -177,6 +184,26 @@ export function FutureChangeFormModal({
               {...register("positionRef")}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium">תקן משויך (רשות)</label>
+            <select
+              {...register("relatedPositionId")}
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+            >
+              <option value="">— ללא —</option>
+              {positions.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.role ?? "תקן ללא תפקיד"}
+                  {p.unitId ? ` — ${unitNameById.get(p.unitId) ?? ""}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-foreground-subtle">
+              קישור לתקן ספציפי גורם לשינוי הזה להופיע גם במסך &quot;יחידות ומחלקות&quot; תחת
+              &quot;שינויים צפויים&quot;.
+            </p>
           </div>
 
           <div className="sm:col-span-2">

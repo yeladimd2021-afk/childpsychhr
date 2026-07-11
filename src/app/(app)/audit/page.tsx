@@ -7,30 +7,12 @@ import { useAuth } from "@/lib/auth/AuthContext";
 import { canManageUsers } from "@/lib/auth/permissions";
 import { useAuditLogQuery } from "@/lib/queries/useAuditLog";
 import type { EntityType } from "@/lib/schemas/auditLog";
-
-const ENTITY_LABELS: Record<EntityType, string> = {
-  position: "תקן",
-  employee: "עובד",
-  assignment: "שיבוץ",
-  unit: "יחידה",
-  budgetItem: "סעיף תקציב",
-  futureChange: "שינוי עתידי",
-  user: "משתמש",
-  systemSettings: "הגדרות מערכת",
-};
-
-const ACTION_LABELS: Record<string, string> = {
-  create: "נוצר",
-  update: "עודכן",
-  "delete-status": "שונה סטטוס",
-  import: "יובא מאקסל",
-};
-
-function formatValue(v: string | number | boolean | null) {
-  if (v === null) return "—";
-  if (typeof v === "boolean") return v ? "כן" : "לא";
-  return String(v);
-}
+import {
+  ACTION_LABELS,
+  ENTITY_LABELS,
+  formatFieldLabel,
+  formatFieldValue,
+} from "@/lib/domain/auditFieldLabels";
 
 export default function AuditPage() {
   const { profile } = useAuth();
@@ -166,8 +148,8 @@ export default function AuditPage() {
                 <ul className="flex flex-col gap-1">
                   {entry.changes.map((c, i) => (
                     <li key={i}>
-                      <span className="font-medium">{c.field}</span>: {formatValue(c.oldValue)} ←{" "}
-                      {formatValue(c.newValue)}
+                      <span className="font-medium">{formatFieldLabel(c.field, entry.entityType)}</span>:{" "}
+                      {formatFieldValue(c.field, c.oldValue)} ← {formatFieldValue(c.field, c.newValue)}
                     </li>
                   ))}
                 </ul>

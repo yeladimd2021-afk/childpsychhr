@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Heebo } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
+import { APP_DEPARTMENT, APP_NAME, APP_SUBTITLE } from "@/lib/branding";
 
 const heebo = Heebo({
   variable: "--font-heebo",
@@ -10,8 +11,8 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: "מערכת תקנים - אגף פסיכיאטריה ילדים ונוער",
-  description: "ניהול תקנים, עובדים ושינויים עתידיים באגף",
+  title: `${APP_NAME} — ${APP_SUBTITLE}`,
+  description: `${APP_SUBTITLE} · ${APP_DEPARTMENT}`,
 };
 
 export default function RootLayout({
