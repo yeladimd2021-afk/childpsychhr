@@ -16,6 +16,7 @@ import { PositionFormModal } from "@/components/positions/PositionFormModal";
 import { formatEmployeeName } from "@/lib/schemas/employee";
 import { isActiveAssignment } from "@/lib/schemas/assignment";
 import type { VacancyReviewStatusValue } from "@/lib/schemas/vacancyReview";
+import type { PositionFormValues } from "@/lib/schemas/position";
 
 const STATUS_OPTIONS: VacancyReviewStatusValue[] = ["לבדיקה", "בתהליך", "אושר", "הסתיים"];
 const STATUS_TONE: Record<VacancyReviewStatusValue, "amber" | "blue" | "green" | "neutral"> = {
@@ -37,6 +38,7 @@ export default function VacanciesPage() {
   const setReview = useSetVacancyReviewMutation();
 
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
+  const [createPrefill, setCreatePrefill] = useState<Partial<PositionFormValues> | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
@@ -74,7 +76,10 @@ export default function VacanciesPage() {
         </div>
         {editAllowed && (
           <button
-            onClick={() => setShowCreateModal(true)}
+            onClick={() => {
+              setCreatePrefill(null);
+              setShowCreateModal(true);
+            }}
             className="flex items-center gap-2 rounded-lg bg-brand-blue px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:brightness-110"
           >
             <Plus size={18} />
@@ -162,6 +167,25 @@ export default function VacanciesPage() {
                         <Badge tone={STATUS_TONE[review?.status ?? "לבדיקה"]}>
                           {review?.status ?? "לבדיקה"}
                         </Badge>
+                        {editAllowed && b.vacant > 0.01 && (
+                          <button
+                            onClick={() => {
+                              const sample = b.assignedPositions[0];
+                              setCreatePrefill({
+                                unitId: b.budgetItem.unitId,
+                                budgetItemId: b.budgetItem.id,
+                                role: sample?.role ?? null,
+                                fundingSource: sample?.fundingSource ?? "מדינה",
+                              });
+                              setShowCreateModal(true);
+                            }}
+                            title="הוספת תקן נוסף תחת סעיף תקציבי זה"
+                            className="flex items-center gap-1 rounded-lg border border-brand-blue px-2 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue-soft"
+                          >
+                            <Plus size={14} />
+                            הוסף תקן
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -186,7 +210,11 @@ export default function VacanciesPage() {
           position={null}
           units={units}
           budgetItems={budgetItems}
-          onClose={() => setShowCreateModal(false)}
+          prefill={createPrefill ?? undefined}
+          onClose={() => {
+            setShowCreateModal(false);
+            setCreatePrefill(null);
+          }}
         />
       )}
     </div>

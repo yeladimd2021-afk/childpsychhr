@@ -21,6 +21,7 @@ export function PositionFormModal({
   onClose,
   readOnly = false,
   hasActiveAssignment = false,
+  prefill,
 }: {
   position: Position | null;
   units: Unit[];
@@ -30,6 +31,10 @@ export function PositionFormModal({
   /** Whether this position currently has an active Assignment — while true, status must
    * stay מאויש and can only change via the end/transfer assignment actions. */
   hasActiveAssignment?: boolean;
+  /** Pre-fills a subset of fields for a brand-new position (e.g. unit + budget item, when
+   * adding another slot under a budget line that already has room left). Ignored when editing
+   * an existing position. */
+  prefill?: Partial<PositionFormValues>;
 }) {
   const createMutation = useCreatePositionMutation();
   const updateMutation = useUpdatePositionMutation();
@@ -53,6 +58,7 @@ export function PositionFormModal({
           status: "פנוי",
           source: "ידני",
           notes: "",
+          ...prefill,
         },
   });
 
