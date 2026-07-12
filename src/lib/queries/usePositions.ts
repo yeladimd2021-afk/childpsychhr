@@ -73,8 +73,8 @@ export function useUpdatePositionMutation() {
   });
 }
 
-/** Sets a position's status directly (e.g. פנוי → מוקפא) without a full form submit —
- * used by quick row actions. */
+/** Sets a position's status directly (e.g. פנוי → מוקפא), optionally alongside frozenUntil,
+ * without a full form submit — used by quick row actions like the freeze/resume buttons. */
 export function useSetPositionStatusMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
@@ -83,16 +83,22 @@ export function useSetPositionStatusMutation() {
       id,
       before,
       status,
+      frozenUntil,
     }: {
       id: string;
       before: Position;
       status: Position["status"];
+      /** Pass to also update frozenUntil in the same call (e.g. clearing it to null on
+       * resume). Omit to leave it untouched. */
+      frozenUntil?: number | null;
     }) => {
       const updatedAt = Date.now();
-      await updateDocById(COLLECTION, id, { status, updatedAt });
+      const fields: Record<string, unknown> = { status, updatedAt };
+      if (frozenUntil !== undefined) fields.frozenUntil = frozenUntil;
+      await updateDocById(COLLECTION, id, fields);
       const changes = diffFields(
         before as unknown as Record<string, string | number | boolean | null>,
-        { status, updatedAt } as unknown as Record<string, string | number | boolean | null>
+        { ...fields } as unknown as Record<string, string | number | boolean | null>
       ).filter((c) => c.field !== "updatedAt");
       await recordHistoryEntry({
         entityType: "position",

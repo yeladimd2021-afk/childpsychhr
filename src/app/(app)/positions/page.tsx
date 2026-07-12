@@ -2,16 +2,27 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Download, History as HistoryIcon, Pencil, UserMinus, ArrowRightLeft, UserPlus } from "lucide-react";
+import {
+  Plus,
+  Download,
+  History as HistoryIcon,
+  Pencil,
+  UserMinus,
+  ArrowRightLeft,
+  UserPlus,
+  Snowflake,
+  PlayCircle,
+} from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
-import { usePositionsQuery } from "@/lib/queries/usePositions";
+import { usePositionsQuery, useSetPositionStatusMutation } from "@/lib/queries/usePositions";
 import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery, useEndAssignmentMutation } from "@/lib/queries/useAssignments";
 import { PositionFormModal } from "@/components/positions/PositionFormModal";
+import { FreezePositionModal } from "@/components/positions/FreezePositionModal";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { AssignEmployeeModal } from "@/components/employees/AssignEmployeeModal";
 import { TransferAssignmentModal } from "@/components/employees/TransferAssignmentModal";
@@ -41,6 +52,7 @@ export default function PositionsPage() {
   const { data: employees = [], isLoading: loadingEmployees } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
   const endAssignmentMutation = useEndAssignmentMutation();
+  const setPositionStatusMutation = useSetPositionStatusMutation();
 
   const [tab, setTab] = useState<Tab>("positions");
   const [search, setSearch] = useState("");
@@ -56,6 +68,7 @@ export default function PositionsPage() {
   const [transferTarget, setTransferTarget] = useState<{ assignment: Assignment; position: Position; label: string } | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
+  const [freezingPosition, setFreezingPosition] = useState<{ position: Position; employeeLabel: string } | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -145,6 +158,15 @@ export default function PositionsPage() {
     }
     return result;
   }, [employees, search, employeeUnitFilter, activeAssignmentByEmployeeId, positionById]);
+
+  async function handleResumeFromFreeze(position: Position) {
+    await setPositionStatusMutation.mutateAsync({
+      id: position.id,
+      before: position,
+      status: "מאויש",
+      frozenUntil: null,
+    });
+  }
 
   async function handleEndAssignment(position: Position) {
     const assignment = activeAssignmentByPositionId.get(position.id);
@@ -341,6 +363,11 @@ export default function PositionsPage() {
                     </td>
                     <td className="px-3 py-3">
                       <Badge tone={POSITION_STATUS_TONE[p.status]}>{p.status}</Badge>
+                      {p.status === "מוקפא" && p.frozenUntil && (
+                        <p className="mt-1 text-xs text-foreground-subtle">
+                          עד {new Date(p.frozenUntil).toLocaleDateString("he-IL")}
+                        </p>
+                      )}
                     </td>
                     <td className="px-3 py-3">{employee ? formatEmployeeName(employee) : "—"}</td>
                     <td className="max-w-[160px] truncate px-3 py-3 text-foreground-subtle">{p.notes || "—"}</td>
@@ -394,7 +421,27 @@ export default function PositionsPage() {
                             >
                               <UserMinus size={16} />
                             </button>
+                            <button
+                              onClick={() =>
+                                setFreezingPosition({ position: p, employeeLabel: formatEmployeeName(employee) })
+                              }
+                              aria-label="הקפאה זמנית (חופשת לידה/מחלה)"
+                              title="הקפאה זמנית (חופשת לידה/מחלה)"
+                              className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
+                            >
+                              <Snowflake size={16} />
+                            </button>
                           </>
+                        )}
+                        {editAllowed && p.status === "מוקפא" && assignment && (
+                          <button
+                            onClick={() => handleResumeFromFreeze(p)}
+                            aria-label="סיום הקפאה — חזרה מחופשה"
+                            title="סיום הקפאה — חזרה מחופשה"
+                            className="rounded-lg p-1.5 text-brand-green hover:bg-brand-green-soft"
+                          >
+                            <PlayCircle size={16} />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -418,8 +465,11 @@ export default function PositionsPage() {
               <tr>
                 <th className="px-3 py-3 text-right">שם מלא</th>
                 <th className="px-3 py-3 text-right">ת.ז.</th>
+                <th className="px-3 py-3 text-right">טלפון</th>
                 <th className="px-3 py-3 text-right">תקן נוכחי</th>
-                <th className="px-3 py-3 text-right">יחידה</th>
+                <th className="px-3 py-3 text-right">יחידה (תקציבית)</th>
+                <th className="px-3 py-3 text-right">מחלקה בפועל</th>
+                <th className="px-3 py-3 text-right">תפקיד בפועל</th>
                 <th className="px-3 py-3 text-right">הערות</th>
                 <th className="px-3 py-3 text-right"></th>
               </tr>
@@ -434,6 +484,9 @@ export default function PositionsPage() {
                     <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
                       {emp.idNumber ?? "—"}
                     </td>
+                    <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
+                      {emp.phone ?? "—"}
+                    </td>
                     <td className="px-3 py-3">
                       {position ? (
                         position.role ?? "תקן"
@@ -444,6 +497,10 @@ export default function PositionsPage() {
                     <td className="px-3 py-3">
                       {position?.unitId ? (unitNameById.get(position.unitId) ?? "—") : "—"}
                     </td>
+                    <td className="px-3 py-3">
+                      {emp.actualUnitId ? (unitNameById.get(emp.actualUnitId) ?? "—") : "—"}
+                    </td>
+                    <td className="px-3 py-3">{emp.actualRole || "—"}</td>
                     <td className="max-w-[200px] truncate px-3 py-3 text-foreground-subtle">
                       {emp.notes || "—"}
                     </td>
@@ -472,7 +529,7 @@ export default function PositionsPage() {
               })}
               {filteredEmployees.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-foreground-subtle">
+                  <td colSpan={9} className="px-3 py-8 text-center text-foreground-subtle">
                     לא נמצאו עובדים תואמים
                   </td>
                 </tr>
@@ -500,12 +557,20 @@ export default function PositionsPage() {
           hasActiveAssignment={activeAssignmentByPositionId.has(editingPosition.id)}
         />
       )}
+      {freezingPosition && (
+        <FreezePositionModal
+          position={freezingPosition.position}
+          employeeLabel={freezingPosition.employeeLabel}
+          onClose={() => setFreezingPosition(null)}
+        />
+      )}
       {showCreateEmployee && (
-        <EmployeeFormModal employee={null} onClose={() => setShowCreateEmployee(false)} />
+        <EmployeeFormModal employee={null} units={units} onClose={() => setShowCreateEmployee(false)} />
       )}
       {editingEmployee && (
         <EmployeeFormModal
           employee={editingEmployee}
+          units={units}
           onClose={() => setEditingEmployee(null)}
           readOnly={!editAllowed}
         />

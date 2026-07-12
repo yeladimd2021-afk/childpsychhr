@@ -32,11 +32,15 @@ export const FIELD_LABELS: Record<string, string> = {
   employmentPercent: "אחוז משרה",
   role: "תפקיד",
   status: "סטטוס",
+  frozenUntil: "מוקפא עד תאריך",
   source: "מקור רישום",
   notes: "הערות",
   firstName: "שם פרטי",
   lastName: "שם משפחה",
   idNumber: "תעודת זהות",
+  phone: "טלפון",
+  actualUnitId: "מחלקה בפועל",
+  actualRole: "תפקיד בפועל",
   name: "שם",
   order: "סדר תצוגה",
   code: "קוד",
@@ -65,7 +69,7 @@ export const FIELD_LABELS: Record<string, string> = {
 const PERCENT_FIELDS = new Set(["employmentPercent"]);
 
 /** Fields whose stored value is an epoch-ms timestamp meant to be read as a date. */
-const DATE_FIELDS = new Set(["effectiveDate", "startDate", "endDate"]);
+const DATE_FIELDS = new Set(["effectiveDate", "startDate", "endDate", "frozenUntil"]);
 
 /** A handful of field keys mean something different depending on which entity they belong to
  * (e.g. "role" is a job title on a Position but a permission level — admin/editor/viewer — on a

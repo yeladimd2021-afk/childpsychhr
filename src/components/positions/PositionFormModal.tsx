@@ -14,6 +14,11 @@ function toPercentInputValue(v: number | null) {
   return v !== null ? String(Math.round(v * 1000) / 10) : "";
 }
 
+function toDateInputValue(ts: number | null) {
+  if (!ts) return "";
+  return new Date(ts).toISOString().slice(0, 10);
+}
+
 export function PositionFormModal({
   position,
   units,
@@ -47,7 +52,7 @@ export function PositionFormModal({
   } = useForm<PositionFormValues>({
     resolver: zodResolver(positionFormSchema),
     defaultValues: position
-      ? { ...position }
+      ? { ...position, frozenUntil: position.frozenUntil ?? null }
       : {
           fundingSource: "מדינה",
           unitId: null,
@@ -56,6 +61,7 @@ export function PositionFormModal({
           employmentPercent: null,
           role: null,
           status: "פנוי",
+          frozenUntil: null,
           source: "ידני",
           notes: "",
           ...prefill,
@@ -73,6 +79,7 @@ export function PositionFormModal({
 
   const submitting = createMutation.isPending || updateMutation.isPending;
   const selectedUnitId = useWatch({ control, name: "unitId" });
+  const watchedStatus = useWatch({ control, name: "status" });
   const relevantBudgetItems = budgetItems.filter((b) => b.unitId === selectedUnitId);
 
   return (
@@ -163,11 +170,13 @@ export function PositionFormModal({
             <label className="mb-1 block text-sm font-medium">סטטוס</label>
             <select
               {...register("status")}
-              disabled={hasActiveAssignment}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-60"
             >
               {hasActiveAssignment ? (
-                <option value="מאויש">מאויש</option>
+                <>
+                  <option value="מאויש">מאויש</option>
+                  <option value="מוקפא">מוקפא (למשל חופשת לידה — העובד/ת נשאר/ת משויך/ת)</option>
+                </>
               ) : (
                 <>
                   <option value="פנוי">פנוי</option>
@@ -178,11 +187,36 @@ export function PositionFormModal({
             </select>
             {hasActiveAssignment && (
               <p className="mt-1 text-xs text-foreground-subtle">
-                &quot;מאויש&quot; נקבע אוטומטית לפי שיבוץ עובד פעיל — כדי להקפיא, לבטל או לפנות את
-                התקן יש לסיים או להעביר את השיבוץ הקיים קודם.
+                כדי לפנות או לבטל את התקן לגמרי יש לסיים או להעביר את השיבוץ הקיים קודם. &quot;מוקפא&quot;
+                שומר את השיבוץ הקיים — מתאים לחופשת לידה/מחלה ממושכת שבהם התקן עדיין שייך לעובד/ת.
               </p>
             )}
           </div>
+
+          {watchedStatus === "מוקפא" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium">מוקפא עד תאריך</label>
+              <Controller
+                control={control}
+                name="frozenUntil"
+                render={({ field }) => (
+                  <input
+                    type="date"
+                    value={toDateInputValue(field.value)}
+                    onChange={(e) =>
+                      field.onChange(e.target.value ? new Date(e.target.value).getTime() : null)
+                    }
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                  />
+                )}
+              />
+              <p className="mt-1 text-xs text-foreground-subtle">
+                תאריך משוער לחזרה / הפשרת התקן — לא חובה
+              </p>
+            </div>
+          )}
 
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium">הערות</label>

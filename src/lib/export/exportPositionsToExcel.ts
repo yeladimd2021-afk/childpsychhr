@@ -25,6 +25,7 @@ export async function exportPositionsToExcel(
     { header: "סטטוס", key: "status", width: 12 },
     { header: "עובד נוכחי", key: "employeeName", width: 22 },
     { header: "מס' ת.ז.", key: "idNumber", width: 14 },
+    { header: "טלפון", key: "phone", width: 14 },
     { header: "הערות", key: "notes", width: 30 },
   ];
   sheet.getRow(1).font = { bold: true };
@@ -40,6 +41,7 @@ export async function exportPositionsToExcel(
       status: p.status,
       employeeName: employee ? formatEmployeeName(employee) : "",
       idNumber: employee?.idNumber ?? "",
+      phone: employee?.phone ?? "",
       notes: p.notes ?? "",
     });
   }

@@ -5,13 +5,16 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/ui/Modal";
 import { employeeFormSchema, type Employee, type EmployeeFormValues } from "@/lib/schemas/employee";
 import { useCreateEmployeeMutation, useUpdateEmployeeMutation } from "@/lib/queries/useEmployees";
+import type { Unit } from "@/lib/schemas/unit";
 
 export function EmployeeFormModal({
   employee,
+  units,
   onClose,
   readOnly = false,
 }: {
   employee: Employee | null;
+  units: Unit[];
   onClose: () => void;
   readOnly?: boolean;
 }) {
@@ -25,8 +28,22 @@ export function EmployeeFormModal({
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues: employee
-      ? { ...employee }
-      : { firstName: "", lastName: "", idNumber: null, source: "ידני", notes: "" },
+      ? {
+          ...employee,
+          phone: employee.phone ?? null,
+          actualUnitId: employee.actualUnitId ?? null,
+          actualRole: employee.actualRole ?? null,
+        }
+      : {
+          firstName: "",
+          lastName: "",
+          idNumber: null,
+          phone: null,
+          actualUnitId: null,
+          actualRole: null,
+          source: "ידני",
+          notes: "",
+        },
   });
 
   async function onSubmit(values: EmployeeFormValues) {
@@ -73,13 +90,50 @@ export function EmployeeFormModal({
             </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">תעודת זהות</label>
-            <input
-              {...register("idNumber")}
-              dir="ltr"
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">תעודת זהות</label>
+              <input
+                {...register("idNumber")}
+                dir="ltr"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">טלפון</label>
+              <input
+                {...register("phone")}
+                dir="ltr"
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="mb-1 block text-sm font-medium">מחלקה/מרפאה בפועל</label>
+              <select
+                {...register("actualUnitId")}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <option value="">— ללא —</option>
+                {units.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-foreground-subtle">
+                היכן העובד/ת נמצא/ת בפועל — יכול להיות שונה מהיחידה של התקן התקציבי
+              </p>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium">תפקיד בפועל</label>
+              <input
+                {...register("actualRole")}
+                className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+              />
+            </div>
           </div>
 
           <div>

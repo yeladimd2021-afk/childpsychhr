@@ -9,6 +9,12 @@ export const employeeSchema = z.object({
   lastName: z.string().min(1),
   /** Israeli ID, kept as zero-padded text so leading zeros survive. Null when unknown. */
   idNumber: z.string().nullable(),
+  phone: z.string().nullable(),
+  /** Where the person actually works day-to-day and what they actually do there — kept
+   * separate from the Position's own unitId/role, since a position's formal budget line can
+   * sit under a different department than where its holder is practically stationed. */
+  actualUnitId: z.string().nullable(),
+  actualRole: z.string().nullable(),
   source: positionSourceSchema,
   notes: z.string().optional(),
   createdAt: z.number(),

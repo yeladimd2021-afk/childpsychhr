@@ -50,6 +50,7 @@ export async function commitImportedPositions(params: {
           ? "מאויש"
           : "פנוי"
         : "פנוי",
+      frozenUntil: null,
       source: "ייבוא",
       notes: row.notes ?? undefined,
     };
@@ -70,6 +71,9 @@ export async function commitImportedPositions(params: {
         firstName: row.firstName,
         lastName: row.lastName ?? "",
         idNumber: row.idNumber,
+        phone: null,
+        actualUnitId: null,
+        actualRole: null,
         source: "ייבוא",
         notes: undefined,
       };

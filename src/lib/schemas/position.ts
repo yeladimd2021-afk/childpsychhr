@@ -25,6 +25,9 @@ export const positionSchema = z.object({
   employmentPercent: z.number().min(0).max(1).nullable(),
   role: z.string().nullable(),
   status: positionStatusSchema,
+  /** Expected return/thaw date for a מוקפא position (e.g. maternity leave) — meaningless for
+   * any other status. Kept even after the position becomes active again, as history. */
+  frozenUntil: z.number().nullable(),
   source: positionSourceSchema,
   notes: z.string().optional(),
   createdAt: z.number(),

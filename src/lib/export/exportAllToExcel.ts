@@ -57,6 +57,7 @@ export async function exportAllToExcel() {
       { header: "מקור תקציבי", key: "fundingSource", width: 12 },
       { header: "אחוז משרה", key: "employmentPercent", width: 12 },
       { header: "סטטוס", key: "status", width: 12 },
+      { header: "מוקפא עד", key: "frozenUntil", width: 14 },
       { header: "הערות", key: "notes", width: 30 },
     ],
     positions.map((p) => ({
@@ -66,6 +67,7 @@ export async function exportAllToExcel() {
       fundingSource: p.fundingSource,
       employmentPercent: p.employmentPercent !== null ? `${Math.round(p.employmentPercent * 100)}%` : "",
       status: p.status,
+      frozenUntil: p.frozenUntil ? new Date(p.frozenUntil).toLocaleDateString("he-IL") : "",
       notes: p.notes ?? "",
     }))
   );
@@ -77,12 +79,18 @@ export async function exportAllToExcel() {
       { header: "שם פרטי", key: "firstName", width: 15 },
       { header: "שם משפחה", key: "lastName", width: 15 },
       { header: "תעודת זהות", key: "idNumber", width: 14 },
+      { header: "טלפון", key: "phone", width: 14 },
+      { header: "מחלקה בפועל", key: "actualUnit", width: 20 },
+      { header: "תפקיד בפועל", key: "actualRole", width: 18 },
       { header: "הערות", key: "notes", width: 30 },
     ],
     employees.map((e) => ({
       firstName: e.firstName,
       lastName: e.lastName,
       idNumber: e.idNumber ?? "",
+      phone: e.phone ?? "",
+      actualUnit: e.actualUnitId ? (unitNameById.get(e.actualUnitId) ?? "") : "",
+      actualRole: e.actualRole ?? "",
       notes: e.notes ?? "",
     }))
   );
