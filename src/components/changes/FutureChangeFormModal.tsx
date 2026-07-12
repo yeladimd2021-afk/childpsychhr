@@ -21,7 +21,7 @@ function toDateInputValue(ts: number | null) {
 }
 
 function toPercentInputValue(v: number | null) {
-  return v !== null ? String(Math.round(v * 100)) : "";
+  return v !== null ? String(Math.round(v * 1000) / 10) : "";
 }
 
 export function FutureChangeFormModal({
@@ -135,6 +135,7 @@ export function FutureChangeFormModal({
                   type="number"
                   min={0}
                   max={100}
+                  step={0.1}
                   value={toPercentInputValue(field.value)}
                   onChange={(e) =>
                     field.onChange(e.target.value === "" ? null : Number(e.target.value) / 100)

@@ -11,7 +11,7 @@ import {
 } from "@/lib/queries/usePositions";
 
 function toPercentInputValue(v: number | null) {
-  return v !== null ? String(Math.round(v * 100)) : "";
+  return v !== null ? String(Math.round(v * 1000) / 10) : "";
 }
 
 export function PositionFormModal({
@@ -140,6 +140,7 @@ export function PositionFormModal({
                   type="number"
                   min={0}
                   max={100}
+                  step={0.1}
                   value={toPercentInputValue(field.value)}
                   onChange={(e) =>
                     field.onChange(e.target.value === "" ? null : Number(e.target.value) / 100)

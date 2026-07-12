@@ -7,7 +7,7 @@ import type { Position } from "@/lib/schemas/position";
 import { useAssignEmployeeMutation } from "@/lib/queries/useAssignments";
 
 function toPercentInputValue(v: number | null) {
-  return v !== null ? String(Math.round(v * 100)) : "";
+  return v !== null ? String(Math.round(v * 1000) / 10) : "";
 }
 
 export function AssignEmployeeModal({
@@ -170,6 +170,7 @@ export function AssignEmployeeModal({
               type="number"
               min={0}
               max={100}
+              step={0.1}
               value={employmentPercent}
               onChange={(e) => setEmploymentPercent(e.target.value)}
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"

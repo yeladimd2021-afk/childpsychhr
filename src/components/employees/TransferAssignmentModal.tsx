@@ -8,7 +8,7 @@ import type { Unit } from "@/lib/schemas/unit";
 import { useTransferAssignmentMutation } from "@/lib/queries/useAssignments";
 
 function toPercentInputValue(v: number | null) {
-  return v !== null ? String(Math.round(v * 100)) : "";
+  return v !== null ? String(Math.round(v * 1000) / 10) : "";
 }
 
 export function TransferAssignmentModal({
@@ -98,6 +98,7 @@ export function TransferAssignmentModal({
               type="number"
               min={0}
               max={100}
+              step={0.1}
               value={employmentPercent}
               onChange={(e) => setEmploymentPercent(e.target.value)}
               placeholder={toPercentInputValue(
