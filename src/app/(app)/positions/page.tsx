@@ -12,6 +12,7 @@ import {
   UserPlus,
   Snowflake,
   PlayCircle,
+  CalendarClock,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -26,6 +27,7 @@ import { FreezePositionModal } from "@/components/positions/FreezePositionModal"
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { AssignEmployeeModal } from "@/components/employees/AssignEmployeeModal";
 import { TransferAssignmentModal } from "@/components/employees/TransferAssignmentModal";
+import { FutureChangeFormModal } from "@/components/changes/FutureChangeFormModal";
 import { HistoryModal } from "@/components/shared/HistoryModal";
 import { exportPositionsToExcel } from "@/lib/export/exportPositionsToExcel";
 import type { Position } from "@/lib/schemas/position";
@@ -69,6 +71,7 @@ export default function PositionsPage() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
   const [freezingPosition, setFreezingPosition] = useState<{ position: Position; employeeLabel: string } | null>(null);
+  const [leavingSoonFor, setLeavingSoonFor] = useState<{ position: Position; employee: Employee } | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -438,6 +441,16 @@ export default function PositionsPage() {
                             >
                               <Snowflake size={16} />
                             </button>
+                            {employee && (
+                              <button
+                                onClick={() => setLeavingSoonFor({ position: p, employee })}
+                                aria-label="סימון תאריך עזיבה צפוי"
+                                title="סימון תאריך עזיבה צפוי — כך שהמערכת תתריע כשהתקן מתקרב להתפנות"
+                                className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
+                              >
+                                <CalendarClock size={16} />
+                              </button>
+                            )}
                           </>
                         )}
                         {editAllowed && p.status === "מוקפא" && assignment && (
@@ -583,6 +596,23 @@ export default function PositionsPage() {
           position={freezingPosition.position}
           employeeLabel={freezingPosition.employeeLabel}
           onClose={() => setFreezingPosition(null)}
+        />
+      )}
+      {leavingSoonFor && (
+        <FutureChangeFormModal
+          change={null}
+          positions={positions}
+          units={units}
+          prefill={{
+            firstName: leavingSoonFor.employee.firstName,
+            lastName: leavingSoonFor.employee.lastName,
+            changeType: "עזיבה",
+            status: "מתוכנן",
+            relatedPositionId: leavingSoonFor.position.id,
+            employmentPercent: leavingSoonFor.position.employmentPercent,
+            fundingSource: leavingSoonFor.position.fundingSource,
+          }}
+          onClose={() => setLeavingSoonFor(null)}
         />
       )}
       {showCreateEmployee && (

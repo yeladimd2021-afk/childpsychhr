@@ -30,12 +30,17 @@ export function FutureChangeFormModal({
   units,
   onClose,
   readOnly = false,
+  prefill,
 }: {
   change: FutureChange | null;
   positions: Position[];
   units: Unit[];
   onClose: () => void;
   readOnly?: boolean;
+  /** Pre-fills a subset of fields for a brand-new change (e.g. jumping here from a specific
+   * occupied position to flag its holder's planned departure). Ignored when editing an
+   * existing change. */
+  prefill?: Partial<FutureChangeFormValues>;
 }) {
   const unitNameById = new Map(units.map((u) => [u.id, u.name]));
   const createMutation = useCreateFutureChangeMutation();
@@ -62,6 +67,7 @@ export function FutureChangeFormModal({
           status: "מתוכנן",
           relatedPositionId: null,
           notes: "",
+          ...prefill,
         },
   });
 
