@@ -78,9 +78,18 @@ export function PositionFormModal({
   }
 
   const submitting = createMutation.isPending || updateMutation.isPending;
-  const selectedUnitId = useWatch({ control, name: "unitId" });
   const watchedStatus = useWatch({ control, name: "status" });
-  const relevantBudgetItems = budgetItems.filter((b) => b.unitId === selectedUnitId);
+  const unitNameById = new Map(units.map((u) => [u.id, u.name]));
+  // Budget items are listed regardless of which unit the position itself belongs to — the
+  // position's physical unit and the unit that administratively owns its budget line can
+  // legitimately differ (e.g. staff working in a department whose position is funded under a
+  // different division's budget code).
+  const budgetItemsByUnit = new Map<string, BudgetItem[]>();
+  for (const b of budgetItems) {
+    const list = budgetItemsByUnit.get(b.unitId) ?? [];
+    list.push(b);
+    budgetItemsByUnit.set(b.unitId, list);
+  }
 
   return (
     <Modal title={position ? "עריכת תקן" : "הוספת תקן"} onClose={onClose} wide>
@@ -126,16 +135,23 @@ export function PositionFormModal({
             <label className="mb-1 block text-sm font-medium">סעיף תקציבי</label>
             <select
               {...register("budgetItemId")}
-              disabled={!selectedUnitId}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-60"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             >
               <option value="">— ללא —</option>
-              {relevantBudgetItems.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.label} ({b.code})
-                </option>
+              {[...budgetItemsByUnit.entries()].map(([unitId, items]) => (
+                <optgroup key={unitId} label={unitNameById.get(unitId) ?? "ללא יחידה"}>
+                  {items.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.label} ({b.code})
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
+            <p className="mt-1 text-xs text-foreground-subtle">
+              ניתן לבחור סעיף תקציבי מכל יחידה — לא רק מהיחידה שנבחרה למעלה, כדי לתמוך בתקנים
+              שהעובד/ת נמצא/ת בהם בפועל ביחידה אחת אך התקציב שלהם רשום תחת יחידה/אגף אחר.
+            </p>
             {position?.budgetItemRaw && (
               <p className="mt-1 text-xs text-foreground-subtle">
                 ערך מקורי מהאקסל: {position.budgetItemRaw}
