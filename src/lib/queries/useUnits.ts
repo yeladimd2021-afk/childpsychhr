@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDoc, listDocs, updateDocById } from "@/lib/data/dataClient";
+import { createDoc, deleteDocById, listDocs, updateDocById } from "@/lib/data/dataClient";
 import { diffFields, recordHistoryEntry } from "@/lib/firebase/history";
 import type { BudgetItem, BudgetItemFormValues, Unit, UnitFormValues } from "@/lib/schemas/unit";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -79,6 +79,29 @@ export function useCreateBudgetItemMutation() {
         changedByName: profile?.displayName ?? "unknown",
       });
       return id;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [BUDGET_ITEMS] }),
+  });
+}
+
+/** Permanently deletes a budget item. The caller must first confirm no Position still
+ * references it — this mutation does not check, since it has no reliable way to fail the
+ * write back to the user after the fact. */
+export function useDeleteBudgetItemMutation() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({ id, before }: { id: string; before: BudgetItem }) => {
+      await deleteDocById(BUDGET_ITEMS, id);
+      await recordHistoryEntry({
+        entityType: "budgetItem",
+        entityId: id,
+        entityLabel: before.label,
+        action: "delete",
+        changes: [],
+        changedBy: user?.uid ?? "unknown",
+        changedByName: profile?.displayName ?? "unknown",
+      });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [BUDGET_ITEMS] }),
   });

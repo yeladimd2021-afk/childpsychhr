@@ -1,9 +1,10 @@
-import { addDoc, collection, doc, getDocs, setDoc, updateDoc } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from "firebase/firestore";
 import { db, isDemoMode } from "@/lib/firebase/config";
 import {
   demoClearAllData,
   demoClearSeedSamples,
   demoCreate,
+  demoDelete,
   demoIsEmpty,
   demoList,
   demoSet,
@@ -53,6 +54,16 @@ export async function updateDocById(
     return;
   }
   await updateDoc(doc(db!, collectionName, id), data);
+}
+
+/** True hard delete — unlike every other write in this app, there is no way to undo this.
+ * Only ever call it after the caller has confirmed nothing else still references the doc. */
+export async function deleteDocById(collectionName: string, id: string): Promise<void> {
+  if (isDemoMode) {
+    demoDelete(collectionName, id);
+    return;
+  }
+  await deleteDoc(doc(db!, collectionName, id));
 }
 
 export async function setDocById(

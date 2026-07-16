@@ -61,7 +61,10 @@ service cloud.firestore {
     match /budgetItems/{id} {
       allow read: if isActiveUser();
       allow create, update: if canEdit();
-      allow delete: if false;
+      // Unlike every other collection, budget-item deletion is genuinely allowed — the app
+      // only offers the delete action when no Position still references this budget item, so
+      // there is nothing left to orphan.
+      allow delete: if canEdit();
     }
 
     match /futureChanges/{id} {

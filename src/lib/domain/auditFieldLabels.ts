@@ -7,6 +7,7 @@ import type { EntityType } from "@/lib/schemas/auditLog";
 export const ACTION_LABELS: Record<string, string> = {
   create: "נוצר",
   update: "עודכן",
+  delete: "נמחק",
   "delete-status": "שונה סטטוס",
   import: "יובא מאקסל",
 };

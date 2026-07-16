@@ -1,5 +1,5 @@
 import { createDoc } from "@/lib/data/dataClient";
-import type { EntityType, FieldChange } from "@/lib/schemas/auditLog";
+import type { AuditLogEntry, EntityType, FieldChange } from "@/lib/schemas/auditLog";
 
 type Primitive = string | number | boolean | null;
 
@@ -26,7 +26,7 @@ export async function recordHistoryEntry(params: {
   entityType: EntityType;
   entityId: string;
   entityLabel: string;
-  action: "create" | "update" | "delete-status" | "import";
+  action: AuditLogEntry["action"];
   changes: FieldChange[];
   changedBy: string;
   changedByName: string;

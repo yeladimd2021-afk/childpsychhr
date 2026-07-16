@@ -177,6 +177,14 @@ export function demoSet(collectionName: string, id: string, data: Record<string,
   persist();
 }
 
+export function demoDelete(collectionName: string, id: string): void {
+  const list = ensureCollection(collectionName);
+  const index = list.findIndex((d) => d.id === id);
+  if (index === -1) return;
+  list.splice(index, 1);
+  persist();
+}
+
 /** Wipes every collection back to the empty starting state — used by "נקה נתונים וייבא מחדש". */
 export function demoClearAllData(): void {
   for (const key of Object.keys(collections)) delete collections[key];

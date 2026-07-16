@@ -1,13 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
+import { useBudgetItemsQuery, useDeleteBudgetItemMutation, useUnitsQuery } from "@/lib/queries/useUnits";
 import { useFutureChangesQuery } from "@/lib/queries/useFutureChanges";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
@@ -32,6 +32,22 @@ export default function UnitsPage() {
   const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
   const [addingBudgetItemFor, setAddingBudgetItemFor] = useState<string | null>(null);
   const [editingBudgetItem, setEditingBudgetItem] = useState<BudgetItem | null>(null);
+  const deleteBudgetItemMutation = useDeleteBudgetItemMutation();
+
+  function handleDeleteBudgetItem(b: BudgetItem) {
+    const linkedPositions = positions.filter((p) => p.budgetItemId === b.id);
+    if (linkedPositions.length > 0) {
+      window.alert(
+        `לא ניתן למחוק את "${b.label}" — ${linkedPositions.length} תקנים עדיין משויכים אליו. יש להעביר או למחוק אותם קודם.`
+      );
+      return;
+    }
+    const confirmed = window.confirm(
+      `למחוק את סעיף התקציב "${b.label}" (${b.code})? פעולה זו סופית ואינה ניתנת לביטול.`
+    );
+    if (!confirmed) return;
+    deleteBudgetItemMutation.mutate({ id: b.id, before: b });
+  }
 
   const unitStats = useMemo(
     () => computeUnitStats(units, budgetItems, positions),
@@ -108,16 +124,30 @@ export default function UnitsPage() {
                 </div>
                 <div className="flex flex-col gap-1">
                   {unitBudgetItems.map((b) => (
-                    <button
+                    <div
                       key={b.id}
-                      onClick={() => setEditingBudgetItem(b)}
-                      className="flex items-center justify-between rounded-lg bg-background px-2 py-1.5 text-xs hover:bg-brand-blue-soft"
+                      className="flex items-center justify-between gap-2 rounded-lg bg-background px-2 py-1.5 text-xs hover:bg-brand-blue-soft"
                     >
-                      <span>
-                        {b.label} ({b.code})
-                      </span>
-                      <span className="text-foreground-subtle">{round2(b.allocatedQuota)}</span>
-                    </button>
+                      <button
+                        onClick={() => setEditingBudgetItem(b)}
+                        className="flex flex-1 items-center justify-between text-right"
+                      >
+                        <span>
+                          {b.label} ({b.code})
+                        </span>
+                        <span className="text-foreground-subtle">{round2(b.allocatedQuota)}</span>
+                      </button>
+                      {editAllowed && (
+                        <button
+                          onClick={() => handleDeleteBudgetItem(b)}
+                          aria-label="מחיקת סעיף תקציב"
+                          title="מחיקת סעיף תקציב"
+                          className="shrink-0 rounded p-1 text-foreground-subtle hover:bg-brand-red-soft hover:text-brand-red"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                   {unitBudgetItems.length === 0 && (
                     <p className="text-xs text-foreground-subtle">אין עדיין סעיפי תקציב</p>

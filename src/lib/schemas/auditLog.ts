@@ -24,7 +24,7 @@ export const auditLogEntrySchema = z.object({
   entityType: entityTypeSchema,
   entityId: z.string(),
   entityLabel: z.string(),
-  action: z.enum(["create", "update", "delete-status", "import"]),
+  action: z.enum(["create", "update", "delete", "delete-status", "import"]),
   changes: z.array(fieldChangeSchema),
   changedBy: z.string(),
   changedByName: z.string(),

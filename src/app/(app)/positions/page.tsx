@@ -102,10 +102,16 @@ export default function PositionsPage() {
     return map;
   }, [assignments]);
 
-  const activeAssignmentByEmployeeId = useMemo(() => {
-    const map = new Map<string, Assignment>();
+  // An employee can hold more than one active assignment at once (e.g. a social worker split
+  // across a residential unit and a clinic, each its own budget line) — keyed to a list, not a
+  // single Assignment, so no simultaneous position silently disappears from view.
+  const activeAssignmentsByEmployeeId = useMemo(() => {
+    const map = new Map<string, Assignment[]>();
     for (const a of assignments) {
-      if (isActiveAssignment(a)) map.set(a.employeeId, a);
+      if (!isActiveAssignment(a)) continue;
+      const list = map.get(a.employeeId) ?? [];
+      list.push(a);
+      map.set(a.employeeId, list);
     }
     return map;
   }, [assignments]);
@@ -151,13 +157,14 @@ export default function PositionsPage() {
     }
     if (employeeUnitFilter) {
       result = result.filter((e) => {
-        const assignment = activeAssignmentByEmployeeId.get(e.id);
-        const position = assignment ? positionById.get(assignment.positionId) : null;
-        return position?.unitId === employeeUnitFilter;
+        const employeeAssignments = activeAssignmentsByEmployeeId.get(e.id) ?? [];
+        return employeeAssignments.some(
+          (a) => positionById.get(a.positionId)?.unitId === employeeUnitFilter
+        );
       });
     }
     return result;
-  }, [employees, search, employeeUnitFilter, activeAssignmentByEmployeeId, positionById]);
+  }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, positionById]);
 
   async function handleResumeFromFreeze(position: Position) {
     await setPositionStatusMutation.mutateAsync({
@@ -476,8 +483,10 @@ export default function PositionsPage() {
             </thead>
             <tbody>
               {filteredEmployees.map((emp) => {
-                const assignment = activeAssignmentByEmployeeId.get(emp.id);
-                const position = assignment ? positionById.get(assignment.positionId) : null;
+                const employeeAssignments = activeAssignmentsByEmployeeId.get(emp.id) ?? [];
+                const employeePositions = employeeAssignments
+                  .map((a) => positionById.get(a.positionId))
+                  .filter((p): p is Position => !!p);
                 return (
                   <tr key={emp.id} className="border-t border-border hover:bg-background/60">
                     <td className="px-3 py-3 font-medium">{formatEmployeeName(emp)}</td>
@@ -488,14 +497,26 @@ export default function PositionsPage() {
                       {emp.phone ?? "—"}
                     </td>
                     <td className="px-3 py-3">
-                      {position ? (
-                        position.role ?? "תקן"
+                      {employeePositions.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {employeePositions.map((p) => (
+                            <span key={p.id}>{p.role ?? "תקן"}</span>
+                          ))}
+                        </div>
                       ) : (
                         <Badge tone="neutral">לא משובץ</Badge>
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      {position?.unitId ? (unitNameById.get(position.unitId) ?? "—") : "—"}
+                      {employeePositions.length > 0 ? (
+                        <div className="flex flex-col gap-0.5">
+                          {employeePositions.map((p) => (
+                            <span key={p.id}>{p.unitId ? (unitNameById.get(p.unitId) ?? "—") : "—"}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       {emp.actualUnitId ? (unitNameById.get(emp.actualUnitId) ?? "—") : "—"}
