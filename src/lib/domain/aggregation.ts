@@ -18,20 +18,27 @@ export function computeUnitStats(
   budgetItems: BudgetItem[],
   positions: Position[]
 ): UnitStats[] {
+  // Occupied/vacant must roll up from the same per-budget-item numbers shown lower on this
+  // page (computeBudgetItemStats), keyed by budgetItemId — not by position.unitId. A position's
+  // own unit (where its holder physically works) can legitimately differ from the unit that
+  // owns its budget line, so summing by position.unitId here would silently disagree with the
+  // budget-item rows underneath it.
+  const budgetItemStats = computeBudgetItemStats(budgetItems, positions);
+
   return units
     .map((unit) => {
-      const unitBudgetItems = budgetItems.filter((b) => b.unitId === unit.id);
-      const allocatedQuota = unitBudgetItems.reduce((sum, b) => sum + b.allocatedQuota, 0);
+      const unitBudgetItemStats = budgetItemStats.filter((s) => s.budgetItem.unitId === unit.id);
+      const allocatedQuota = unitBudgetItemStats.reduce((sum, s) => sum + s.budgetItem.allocatedQuota, 0);
+      const occupied = unitBudgetItemStats.reduce((sum, s) => sum + s.occupied, 0);
+      // Headcount display (staffCount/frozenCount) is deliberately still based on physical
+      // location (position.unitId) — a different concept from budget ownership above.
       const unitPositions = positions.filter((p) => p.unitId === unit.id);
-      const occupied = unitPositions
-        .filter((p) => p.status === "מאויש")
-        .reduce((sum, p) => sum + (p.employmentPercent ?? 0), 0);
       return {
         unit,
         allocatedQuota,
         occupied,
         vacant: allocatedQuota - occupied,
-        quotaDefined: unitBudgetItems.length > 0,
+        quotaDefined: unitBudgetItemStats.length > 0,
         staffCount: unitPositions.length,
         frozenCount: unitPositions.filter((p) => p.status === "מוקפא").length,
       };

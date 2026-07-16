@@ -29,7 +29,10 @@ function fullyStaffedStreakMonths(
   statusChangesByPosition: Map<string, StatusChange[]>,
   now: number
 ): number {
-  const unitPositions = positions.filter((p) => p.unitId === unit.id);
+  // Positions counted toward a unit's quota are the ones budgeted under it — via budgetItemId —
+  // not the ones physically stationed there via position.unitId, since those two can diverge.
+  const unitBudgetItemIds = new Set(budgetItems.filter((b) => b.unitId === unit.id).map((b) => b.id));
+  const unitPositions = positions.filter((p) => p.budgetItemId && unitBudgetItemIds.has(p.budgetItemId));
   const allocatedQuota = budgetItems.filter((b) => b.unitId === unit.id).reduce((s, b) => s + b.allocatedQuota, 0);
   if (allocatedQuota <= 0) return 0;
 
