@@ -85,15 +85,17 @@ export default function PositionsPage() {
     const tabParam = searchParams.get("tab");
     const newParam = searchParams.get("new");
     const statusFilterParam = searchParams.get("statusFilter");
+    const searchParam = searchParams.get("search");
     // One-time sync from the URL a quick action arrived with (Control Center) into local
     // state — not a response to external state changing over time, so the usual "don't
     // setState in an effect" guidance doesn't really fit this one-shot deep-link case.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (tabParam === "employees" || tabParam === "positions") setTab(tabParam);
     if (statusFilterParam) setStatusFilter(statusFilterParam);
+    if (searchParam) setSearch(searchParam);
     if (newParam === "employee") setShowCreateEmployee(true);
     if (newParam === "position") setShowCreatePosition(true);
-    if (tabParam || newParam || statusFilterParam) router.replace("/positions");
+    if (tabParam || newParam || statusFilterParam || searchParam) router.replace("/positions");
     // Only meant to run once, reading whatever query params the Control Center's quick
     // actions arrived with — not meant to react to later changes in searchParams/router.
     // eslint-disable-next-line react-hooks/exhaustive-deps

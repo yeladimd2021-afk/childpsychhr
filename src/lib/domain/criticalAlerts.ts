@@ -23,12 +23,15 @@ export function computeCriticalAlerts(params: {
   const { positions, positionExceptions, employeeExceptions, vacancyAgeTiers, unitNameById } = params;
   const alerts: CriticalAlert[] = [];
 
+  const positionHref = (p: Position) =>
+    p.role ? `/positions?tab=positions&search=${encodeURIComponent(p.role)}` : "/positions?tab=positions";
+
   for (const e of positionExceptions) {
     alerts.push({
       id: `pos-exc-${e.position.id}`,
       category: "חריגת נתונים",
       message: `${e.position.role ?? "תקן"} — ${e.reason}`,
-      href: "/positions",
+      href: positionHref(e.position),
     });
   }
   for (const e of employeeExceptions) {
@@ -36,7 +39,11 @@ export function computeCriticalAlerts(params: {
       id: `emp-exc-${e.employee.id}`,
       category: "חריגת נתונים",
       message: `${formatEmployeeName(e.employee)} — ${e.reason}`,
-      href: "/positions",
+      // Searching by the duplicated ID number itself (not the name) surfaces both conflicting
+      // employees at once — that's the whole point of flagging a duplicate.
+      href: e.employee.idNumber
+        ? `/positions?tab=employees&search=${encodeURIComponent(e.employee.idNumber)}`
+        : `/positions?tab=employees&search=${encodeURIComponent(formatEmployeeName(e.employee))}`,
     });
   }
 
@@ -46,7 +53,7 @@ export function computeCriticalAlerts(params: {
         id: `no-budget-${p.id}`,
         category: "מקור תקציבי חסר",
         message: `${p.role ?? "תקן"} ביחידה ${unitNameById.get(p.unitId) ?? "לא ידועה"} — ללא סעיף תקציב משויך`,
-        href: "/positions",
+        href: positionHref(p),
       });
     }
     if (!p.role) {
@@ -54,7 +61,7 @@ export function computeCriticalAlerts(params: {
         id: `no-role-${p.id}`,
         category: "שדה חובה חסר",
         message: `תקן ללא הגדרת תפקיד${p.unitId ? ` ביחידה ${unitNameById.get(p.unitId) ?? ""}` : ""}`,
-        href: "/positions",
+        href: "/positions?tab=positions",
       });
     }
   }
