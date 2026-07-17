@@ -13,12 +13,17 @@ import {
   Snowflake,
   PlayCircle,
   CalendarClock,
+  Trash2,
 } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
-import { usePositionsQuery, useSetPositionStatusMutation } from "@/lib/queries/usePositions";
+import {
+  usePositionsQuery,
+  useSetPositionStatusMutation,
+  useDeletePositionMutation,
+} from "@/lib/queries/usePositions";
 import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery, useEndAssignmentMutation } from "@/lib/queries/useAssignments";
@@ -55,6 +60,7 @@ export default function PositionsPage() {
   const { data: assignments = [] } = useAssignmentsQuery();
   const endAssignmentMutation = useEndAssignmentMutation();
   const setPositionStatusMutation = useSetPositionStatusMutation();
+  const deletePositionMutation = useDeletePositionMutation();
 
   const [tab, setTab] = useState<Tab>("positions");
   const [search, setSearch] = useState("");
@@ -168,6 +174,21 @@ export default function PositionsPage() {
     }
     return result;
   }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, positionById]);
+
+  function handleDeletePosition(position: Position) {
+    const linkedAssignments = assignments.filter((a) => a.positionId === position.id);
+    if (linkedAssignments.length > 0) {
+      window.alert(
+        `לא ניתן למחוק את התקן "${position.role ?? "ללא תפקיד"}" — יש לו היסטוריית שיבוצים (${linkedAssignments.length}). מחיקה הייתה מוחקת גם את ההיסטוריה של מי שהוחזק בתקן הזה.`
+      );
+      return;
+    }
+    const confirmed = window.confirm(
+      `למחוק את התקן "${position.role ?? "ללא תפקיד"}"? פעולה זו סופית ואינה ניתנת לביטול.`
+    );
+    if (!confirmed) return;
+    deletePositionMutation.mutate({ id: position.id, before: position });
+  }
 
   async function handleResumeFromFreeze(position: Position) {
     await setPositionStatusMutation.mutateAsync({
@@ -461,6 +482,16 @@ export default function PositionsPage() {
                             className="rounded-lg p-1.5 text-brand-green hover:bg-brand-green-soft"
                           >
                             <PlayCircle size={16} />
+                          </button>
+                        )}
+                        {editAllowed && (
+                          <button
+                            onClick={() => handleDeletePosition(p)}
+                            aria-label="מחיקת תקן"
+                            title="מחיקת תקן"
+                            className="rounded-lg p-1.5 text-foreground-subtle hover:bg-brand-red-soft hover:text-brand-red"
+                          >
+                            <Trash2 size={16} />
                           </button>
                         )}
                       </div>

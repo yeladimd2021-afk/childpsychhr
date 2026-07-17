@@ -37,7 +37,10 @@ service cloud.firestore {
     match /positions/{id} {
       allow read: if isActiveUser();
       allow create, update: if canEdit();
-      allow delete: if false;
+      // Like budgetItems, deletion is genuinely allowed — the app only offers the delete
+      // action when no Assignment (active or historical) still references this position, so
+      // there is no "who held this position over the years" record left to orphan.
+      allow delete: if canEdit();
     }
 
     match /employees/{id} {

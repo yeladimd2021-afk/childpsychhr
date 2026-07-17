@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createDoc, listDocs, updateDocById } from "@/lib/data/dataClient";
+import { createDoc, deleteDocById, listDocs, updateDocById } from "@/lib/data/dataClient";
 import { diffFields, recordHistoryEntry } from "@/lib/firebase/history";
 import type { Position, PositionFormValues } from "@/lib/schemas/position";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -65,6 +65,29 @@ export function useUpdatePositionMutation() {
         entityLabel: positionLabel(values),
         action: "update",
         changes,
+        changedBy: user?.uid ?? "unknown",
+        changedByName: profile?.displayName ?? "unknown",
+      });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [COLLECTION] }),
+  });
+}
+
+/** Permanently deletes a position. The caller must first confirm no Assignment (active or
+ * historical) still references it — this mutation does not check, since it has no reliable
+ * way to fail the write back to the user after the fact. */
+export function useDeletePositionMutation() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({ id, before }: { id: string; before: Position }) => {
+      await deleteDocById(COLLECTION, id);
+      await recordHistoryEntry({
+        entityType: "position",
+        entityId: id,
+        entityLabel: positionLabel(before),
+        action: "delete",
+        changes: [],
         changedBy: user?.uid ?? "unknown",
         changedByName: profile?.displayName ?? "unknown",
       });

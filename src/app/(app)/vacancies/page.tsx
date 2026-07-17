@@ -10,21 +10,11 @@ import { usePositionsQuery } from "@/lib/queries/usePositions";
 import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
-import { useSetVacancyReviewMutation, useVacancyReviewsQuery } from "@/lib/queries/useVacancyReviews";
 import { computeBudgetItemStats, computeUnitStats, round2 } from "@/lib/domain/aggregation";
 import { PositionFormModal } from "@/components/positions/PositionFormModal";
 import { formatEmployeeName } from "@/lib/schemas/employee";
 import { isActiveAssignment } from "@/lib/schemas/assignment";
-import type { VacancyReviewStatusValue } from "@/lib/schemas/vacancyReview";
 import type { PositionFormValues } from "@/lib/schemas/position";
-
-const STATUS_OPTIONS: VacancyReviewStatusValue[] = ["לבדיקה", "בתהליך", "אושר", "הסתיים"];
-const STATUS_TONE: Record<VacancyReviewStatusValue, "amber" | "blue" | "green" | "neutral"> = {
-  לבדיקה: "amber",
-  בתהליך: "blue",
-  אושר: "green",
-  הסתיים: "neutral",
-};
 
 export default function VacanciesPage() {
   const { profile } = useAuth();
@@ -34,8 +24,6 @@ export default function VacanciesPage() {
   const { data: positions = [], isLoading } = usePositionsQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
-  const { data: reviews = [] } = useVacancyReviewsQuery();
-  const setReview = useSetVacancyReviewMutation();
 
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [createPrefill, setCreatePrefill] = useState<Partial<PositionFormValues> | null>(null);
@@ -57,10 +45,6 @@ export default function VacanciesPage() {
   const budgetItemStats = useMemo(
     () => computeBudgetItemStats(budgetItems, positions),
     [budgetItems, positions]
-  );
-  const reviewByBudgetItemId = useMemo(
-    () => new Map(reviews.map((r) => [r.budgetItemId, r])),
-    [reviews]
   );
 
   if (isLoading) return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
@@ -122,7 +106,6 @@ export default function VacanciesPage() {
                     </p>
                   )}
                   {unitBudgetItems.map((b) => {
-                    const review = reviewByBudgetItemId.get(b.budgetItem.id);
                     const staffNames = b.assignedPositions
                       .map((p) => {
                         const assignment = activeAssignmentByPositionId.get(p.id);
@@ -147,26 +130,6 @@ export default function VacanciesPage() {
                             </p>
                           )}
                         </div>
-                        <select
-                          disabled={!editAllowed}
-                          value={review?.status ?? "לבדיקה"}
-                          onChange={(e) =>
-                            setReview.mutate({
-                              budgetItemId: b.budgetItem.id,
-                              status: e.target.value as VacancyReviewStatusValue,
-                            })
-                          }
-                          className="rounded-lg border border-border px-2 py-1 text-xs"
-                        >
-                          {STATUS_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                        <Badge tone={STATUS_TONE[review?.status ?? "לבדיקה"]}>
-                          {review?.status ?? "לבדיקה"}
-                        </Badge>
                         {editAllowed && b.vacant > 0.01 && (
                           <button
                             onClick={() => {
