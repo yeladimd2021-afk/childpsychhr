@@ -27,7 +27,7 @@ import { APP_DEPARTMENT, APP_NAME, APP_SUBTITLE, APP_VERSION } from "@/lib/brand
 
 const NAV_ITEMS = [
   { href: "/", label: "מרכז שליטה ניהולי", icon: LayoutGrid },
-  { href: "/positions", label: "עובדים ותקנים", icon: Users },
+  { href: "/positions", label: "ניהול תקנים", icon: Users },
   { href: "/vacancies", label: "תקנים פנויים", icon: DoorOpen },
   { href: "/changes", label: "שינויים עתידיים", icon: CalendarClock },
   { href: "/units", label: "יחידות ומחלקות", icon: Building2 },

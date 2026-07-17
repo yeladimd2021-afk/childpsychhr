@@ -2,51 +2,27 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import {
-  Plus,
-  Download,
-  History as HistoryIcon,
-  Pencil,
-  UserMinus,
-  ArrowRightLeft,
-  UserPlus,
-  Snowflake,
-  PlayCircle,
-  CalendarClock,
-  Trash2,
-} from "lucide-react";
+import { Plus, Download, History as HistoryIcon, Pencil } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
-import {
-  usePositionsQuery,
-  useSetPositionStatusMutation,
-  useDeletePositionMutation,
-} from "@/lib/queries/usePositions";
+import { usePositionsQuery } from "@/lib/queries/usePositions";
 import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
-import { useAssignmentsQuery, useEndAssignmentMutation } from "@/lib/queries/useAssignments";
+import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { PositionFormModal } from "@/components/positions/PositionFormModal";
-import { FreezePositionModal } from "@/components/positions/FreezePositionModal";
+import { PositionsTable } from "@/components/positions/PositionsTable";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
-import { AssignEmployeeModal } from "@/components/employees/AssignEmployeeModal";
-import { TransferAssignmentModal } from "@/components/employees/TransferAssignmentModal";
-import { FutureChangeFormModal } from "@/components/changes/FutureChangeFormModal";
 import { HistoryModal } from "@/components/shared/HistoryModal";
 import { exportPositionsToExcel } from "@/lib/export/exportPositionsToExcel";
+import { computePositionsSummary } from "@/lib/domain/aggregation";
 import type { Position } from "@/lib/schemas/position";
 import type { Employee } from "@/lib/schemas/employee";
 import { formatEmployeeName } from "@/lib/schemas/employee";
-import type { Assignment } from "@/lib/schemas/assignment";
-import { isActiveAssignment } from "@/lib/schemas/assignment";
+import { isActiveAssignment, type Assignment } from "@/lib/schemas/assignment";
 
-const POSITION_STATUS_TONE = {
-  מאויש: "green",
-  פנוי: "amber",
-  מוקפא: "blue",
-  בביטול: "neutral",
-} as const;
+const PAGE_SIZE = 25;
 
 type Tab = "positions" | "employees";
 
@@ -58,26 +34,20 @@ export default function PositionsPage() {
   const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: employees = [], isLoading: loadingEmployees } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
-  const endAssignmentMutation = useEndAssignmentMutation();
-  const setPositionStatusMutation = useSetPositionStatusMutation();
-  const deletePositionMutation = useDeletePositionMutation();
 
   const [tab, setTab] = useState<Tab>("positions");
   const [search, setSearch] = useState("");
   const [unitFilter, setUnitFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [fundingFilter, setFundingFilter] = useState("");
   const [employeeUnitFilter, setEmployeeUnitFilter] = useState("");
+  const [page, setPage] = useState(1);
 
-  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   const [showCreatePosition, setShowCreatePosition] = useState(false);
-  const [historyEntity, setHistoryEntity] = useState<{ type: "position" | "employee"; id: string; label: string } | null>(null);
-  const [assigningPosition, setAssigningPosition] = useState<Position | null>(null);
-  const [transferTarget, setTransferTarget] = useState<{ assignment: Assignment; position: Position; label: string } | null>(null);
+  const [historyEntity, setHistoryEntity] = useState<{ id: string; label: string } | null>(null);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
-  const [freezingPosition, setFreezingPosition] = useState<{ position: Position; employeeLabel: string } | null>(null);
-  const [leavingSoonFor, setLeavingSoonFor] = useState<{ position: Position; employee: Employee } | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -102,8 +72,11 @@ export default function PositionsPage() {
   }, []);
 
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
-  const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const positionById = useMemo(() => new Map(positions.map((p) => [p.id, p])), [positions]);
+  const roleOptions = useMemo(
+    () => [...new Set(positions.map((p) => p.role).filter((r): r is string => !!r))].sort((a, b) => a.localeCompare(b, "he")),
+    [positions]
+  );
 
   const activeAssignmentByPositionId = useMemo(() => {
     const map = new Map<string, Assignment>();
@@ -127,7 +100,9 @@ export default function PositionsPage() {
     return map;
   }, [assignments]);
 
-  const vacantPositions = useMemo(() => positions.filter((p) => p.status === "פנוי"), [positions]);
+  const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
+
+  const summary = useMemo(() => computePositionsSummary(positions, assignments), [positions, assignments]);
 
   const filteredPositions = useMemo(() => {
     let result = positions;
@@ -146,6 +121,7 @@ export default function PositionsPage() {
       });
     }
     if (unitFilter) result = result.filter((p) => p.unitId === unitFilter);
+    if (roleFilter) result = result.filter((p) => p.role === roleFilter);
     if (statusFilter) result = result.filter((p) => p.status === statusFilter);
     if (fundingFilter) result = result.filter((p) => p.fundingSource === fundingFilter);
     return result;
@@ -153,12 +129,19 @@ export default function PositionsPage() {
     positions,
     search,
     unitFilter,
+    roleFilter,
     statusFilter,
     fundingFilter,
     activeAssignmentByPositionId,
     employeeById,
     unitNameById,
   ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredPositions.length / PAGE_SIZE));
+  // Clamped instead of reset via an effect — filtering down to fewer pages while sitting on a
+  // later page snaps back to the last valid one automatically, without a setState-in-effect.
+  const safePage = Math.min(page, totalPages);
+  const pagedPositions = filteredPositions.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const filteredEmployees = useMemo(() => {
     let result = employees;
@@ -177,49 +160,6 @@ export default function PositionsPage() {
     return result;
   }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, positionById]);
 
-  function handleDeletePosition(position: Position) {
-    if (activeAssignmentByPositionId.has(position.id)) {
-      window.alert(
-        `לא ניתן למחוק את התקן "${position.role ?? "ללא תפקיד"}" — יש לו שיבוץ פעיל כרגע. יש לסיים או להעביר את השיבוץ קודם.`
-      );
-      return;
-    }
-    const pastAssignments = assignments.filter((a) => a.positionId === position.id);
-    const historyWarning =
-      pastAssignments.length > 0
-        ? `\n\nלתקן זה יש היסטוריית שיבוצים (${pastAssignments.length}) — לאחר המחיקה, ההיסטוריה של מי שהוחזק בו בעבר תישאר ללא קישור לתקן.`
-        : "";
-    const confirmed = window.confirm(
-      `למחוק את התקן "${position.role ?? "ללא תפקיד"}"? פעולה זו סופית ואינה ניתנת לביטול.${historyWarning}`
-    );
-    if (!confirmed) return;
-    deletePositionMutation.mutate({ id: position.id, before: position });
-  }
-
-  async function handleResumeFromFreeze(position: Position) {
-    await setPositionStatusMutation.mutateAsync({
-      id: position.id,
-      before: position,
-      status: "מאויש",
-      frozenUntil: null,
-    });
-  }
-
-  async function handleEndAssignment(position: Position) {
-    const assignment = activeAssignmentByPositionId.get(position.id);
-    if (!assignment) return;
-    const employee = employeeById.get(assignment.employeeId);
-    const confirmed = window.confirm(
-      `לסיים את השיבוץ של ${formatEmployeeName(employee)} בתקן "${position.role ?? "ללא תפקיד"}"? התקן יהפוך לפנוי.`
-    );
-    if (!confirmed) return;
-    await endAssignmentMutation.mutateAsync({
-      assignment,
-      position,
-      employeeLabel: formatEmployeeName(employee),
-    });
-  }
-
   if (loadingPositions || loadingEmployees) {
     return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
   }
@@ -228,7 +168,7 @@ export default function PositionsPage() {
     <div className="flex flex-col gap-4 p-6 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold">עובדים ותקנים</h1>
+          <h1 className="text-xl font-semibold">ניהול תקנים</h1>
           <p className="mt-1 text-sm text-foreground-subtle">
             {positions.length} תקנים · {employees.length} עובדים
           </p>
@@ -261,6 +201,31 @@ export default function PositionsPage() {
           )}
         </div>
       </div>
+
+      {tab === "positions" && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+          <Card className="text-center">
+            <p className="text-xs text-foreground-subtle">סה&quot;כ תקנים</p>
+            <p className="mt-1 text-xl font-semibold">{summary.total}</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xs text-foreground-subtle">מאוישים</p>
+            <p className="mt-1 text-xl font-semibold text-brand-green">{summary.occupied}</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xs text-foreground-subtle">פנויים</p>
+            <p className="mt-1 text-xl font-semibold text-brand-amber">{summary.vacant}</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xs text-foreground-subtle">מאוישים חלקית</p>
+            <p className="mt-1 text-xl font-semibold text-brand-blue">{summary.partiallyFilled}</p>
+          </Card>
+          <Card className="text-center">
+            <p className="text-xs text-foreground-subtle">אחוז איוש</p>
+            <p className="mt-1 text-xl font-semibold">{summary.occupancyRate}%</p>
+          </Card>
+        </div>
+      )}
 
       <div className="flex gap-2 border-b border-border">
         <button
@@ -304,6 +269,18 @@ export default function PositionsPage() {
                 ))}
               </select>
               <select
+                value={roleFilter}
+                onChange={(e) => setRoleFilter(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <option value="">כל התפקידים</option>
+                {roleOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
+              <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
                 className="rounded-lg border border-border px-3 py-2 text-sm"
@@ -324,11 +301,12 @@ export default function PositionsPage() {
                 <option value="קרן">קרן</option>
                 <option value="אחר">אחר</option>
               </select>
-              {(unitFilter || statusFilter || fundingFilter || search) && (
+              {(unitFilter || roleFilter || statusFilter || fundingFilter || search) && (
                 <button
                   type="button"
                   onClick={() => {
                     setUnitFilter("");
+                    setRoleFilter("");
                     setStatusFilter("");
                     setFundingFilter("");
                     setSearch("");
@@ -372,149 +350,40 @@ export default function PositionsPage() {
       </Card>
 
       {tab === "positions" ? (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
-            <thead className="bg-background text-xs text-foreground-subtle">
-              <tr>
-                <th className="px-3 py-3 text-right">תפקיד</th>
-                <th className="px-3 py-3 text-right">יחידה</th>
-                <th className="px-3 py-3 text-right">מקור</th>
-                <th className="px-3 py-3 text-right">%</th>
-                <th className="px-3 py-3 text-right">סטטוס</th>
-                <th className="px-3 py-3 text-right">עובד נוכחי</th>
-                <th className="px-3 py-3 text-right">הערות</th>
-                <th className="px-3 py-3 text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPositions.map((p) => {
-                const assignment = activeAssignmentByPositionId.get(p.id);
-                const employee = assignment ? employeeById.get(assignment.employeeId) : null;
-                return (
-                  <tr key={p.id} className="border-t border-border hover:bg-background/60">
-                    <td className="px-3 py-3 font-medium">{p.role ?? "—"}</td>
-                    <td className="px-3 py-3">{p.unitId ? (unitNameById.get(p.unitId) ?? "—") : "—"}</td>
-                    <td className="px-3 py-3">{p.fundingSource}</td>
-                    <td className="px-3 py-3">
-                      {p.employmentPercent !== null ? `${Math.round(p.employmentPercent * 100)}%` : "—"}
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge tone={POSITION_STATUS_TONE[p.status]}>{p.status}</Badge>
-                      {p.status === "מוקפא" && p.frozenUntil && (
-                        <p className="mt-1 text-xs text-foreground-subtle">
-                          עד {new Date(p.frozenUntil).toLocaleDateString("he-IL")}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3">{employee ? formatEmployeeName(employee) : "—"}</td>
-                    <td className="max-w-[160px] truncate px-3 py-3 text-foreground-subtle">{p.notes || "—"}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setHistoryEntity({ type: "position", id: p.id, label: p.role ?? "תקן" })}
-                          aria-label="היסטוריה"
-                          className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                        >
-                          <HistoryIcon size={16} />
-                        </button>
-                        <button
-                          onClick={() => setEditingPosition(p)}
-                          aria-label="עריכה"
-                          className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                        {editAllowed && p.status === "פנוי" && (
-                          <button
-                            onClick={() => setAssigningPosition(p)}
-                            aria-label="שבץ עובד"
-                            title="שבץ עובד"
-                            className="rounded-lg p-1.5 text-brand-blue hover:bg-brand-blue-soft"
-                          >
-                            <UserPlus size={16} />
-                          </button>
-                        )}
-                        {editAllowed && p.status === "מאויש" && assignment && (
-                          <>
-                            <button
-                              onClick={() =>
-                                setTransferTarget({
-                                  assignment,
-                                  position: p,
-                                  label: formatEmployeeName(employee),
-                                })
-                              }
-                              aria-label="העברה לתקן אחר"
-                              title="העברה לתקן אחר"
-                              className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                            >
-                              <ArrowRightLeft size={16} />
-                            </button>
-                            <button
-                              onClick={() => handleEndAssignment(p)}
-                              aria-label="סיום שיבוץ"
-                              title="סיום שיבוץ"
-                              className="rounded-lg p-1.5 text-brand-red hover:bg-brand-red-soft"
-                            >
-                              <UserMinus size={16} />
-                            </button>
-                            <button
-                              onClick={() =>
-                                setFreezingPosition({ position: p, employeeLabel: formatEmployeeName(employee) })
-                              }
-                              aria-label="הקפאה זמנית (חופשת לידה/מחלה)"
-                              title="הקפאה זמנית (חופשת לידה/מחלה)"
-                              className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                            >
-                              <Snowflake size={16} />
-                            </button>
-                            {employee && (
-                              <button
-                                onClick={() => setLeavingSoonFor({ position: p, employee })}
-                                aria-label="סימון תאריך עזיבה צפוי"
-                                title="סימון תאריך עזיבה צפוי — כך שהמערכת תתריע כשהתקן מתקרב להתפנות"
-                                className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                              >
-                                <CalendarClock size={16} />
-                              </button>
-                            )}
-                          </>
-                        )}
-                        {editAllowed && p.status === "מוקפא" && assignment && (
-                          <button
-                            onClick={() => handleResumeFromFreeze(p)}
-                            aria-label="סיום הקפאה — חזרה מחופשה"
-                            title="סיום הקפאה — חזרה מחופשה"
-                            className="rounded-lg p-1.5 text-brand-green hover:bg-brand-green-soft"
-                          >
-                            <PlayCircle size={16} />
-                          </button>
-                        )}
-                        {editAllowed && (
-                          <button
-                            onClick={() => handleDeletePosition(p)}
-                            aria-label="מחיקת תקן"
-                            title="מחיקת תקן"
-                            className="rounded-lg p-1.5 text-foreground-subtle hover:bg-brand-red-soft hover:text-brand-red"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredPositions.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-foreground-subtle">
-                    לא נמצאו תקנים תואמים
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </Card>
+        <>
+          <Card className="overflow-x-auto p-0">
+            <PositionsTable
+              positions={pagedPositions}
+              units={units}
+              budgetItems={budgetItems}
+              employees={employees}
+              assignments={assignments}
+              editAllowed={editAllowed}
+              variant="full"
+            />
+          </Card>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-3 text-sm">
+              <button
+                onClick={() => setPage(Math.max(1, safePage - 1))}
+                disabled={safePage === 1}
+                className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+              >
+                הקודם
+              </button>
+              <span className="text-foreground-subtle">
+                עמוד {safePage} מתוך {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                disabled={safePage === totalPages}
+                className="rounded-lg border border-border px-3 py-1.5 disabled:opacity-40"
+              >
+                הבא
+              </button>
+            </div>
+          )}
+        </>
       ) : (
         <Card className="overflow-x-auto p-0">
           <table className="w-full text-sm">
@@ -579,7 +448,7 @@ export default function PositionsPage() {
                       <div className="flex gap-1">
                         <button
                           onClick={() =>
-                            setHistoryEntity({ type: "employee", id: emp.id, label: formatEmployeeName(emp) })
+                            setHistoryEntity({ id: emp.id, label: formatEmployeeName(emp) })
                           }
                           aria-label="היסטוריה"
                           className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
@@ -618,40 +487,6 @@ export default function PositionsPage() {
           onClose={() => setShowCreatePosition(false)}
         />
       )}
-      {editingPosition && (
-        <PositionFormModal
-          position={editingPosition}
-          units={units}
-          budgetItems={budgetItems}
-          onClose={() => setEditingPosition(null)}
-          readOnly={!editAllowed}
-          hasActiveAssignment={activeAssignmentByPositionId.has(editingPosition.id)}
-        />
-      )}
-      {freezingPosition && (
-        <FreezePositionModal
-          position={freezingPosition.position}
-          employeeLabel={freezingPosition.employeeLabel}
-          onClose={() => setFreezingPosition(null)}
-        />
-      )}
-      {leavingSoonFor && (
-        <FutureChangeFormModal
-          change={null}
-          positions={positions}
-          units={units}
-          prefill={{
-            firstName: leavingSoonFor.employee.firstName,
-            lastName: leavingSoonFor.employee.lastName,
-            changeType: "עזיבה",
-            status: "מתוכנן",
-            relatedPositionId: leavingSoonFor.position.id,
-            employmentPercent: leavingSoonFor.position.employmentPercent,
-            fundingSource: leavingSoonFor.position.fundingSource,
-          }}
-          onClose={() => setLeavingSoonFor(null)}
-        />
-      )}
       {showCreateEmployee && (
         <EmployeeFormModal employee={null} units={units} onClose={() => setShowCreateEmployee(false)} />
       )}
@@ -663,26 +498,9 @@ export default function PositionsPage() {
           readOnly={!editAllowed}
         />
       )}
-      {assigningPosition && (
-        <AssignEmployeeModal
-          position={assigningPosition}
-          employees={employees}
-          onClose={() => setAssigningPosition(null)}
-        />
-      )}
-      {transferTarget && (
-        <TransferAssignmentModal
-          currentAssignment={transferTarget.assignment}
-          currentPosition={transferTarget.position}
-          employeeLabel={transferTarget.label}
-          vacantPositions={vacantPositions}
-          units={units}
-          onClose={() => setTransferTarget(null)}
-        />
-      )}
       {historyEntity && (
         <HistoryModal
-          entityType={historyEntity.type}
+          entityType="employee"
           entityId={historyEntity.id}
           entityLabel={historyEntity.label}
           onClose={() => setHistoryEntity(null)}
