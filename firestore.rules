@@ -38,8 +38,9 @@ service cloud.firestore {
       allow read: if isActiveUser();
       allow create, update: if canEdit();
       // Like budgetItems, deletion is genuinely allowed — the app only offers the delete
-      // action when no Assignment (active or historical) still references this position, so
-      // there is no "who held this position over the years" record left to orphan.
+      // action when there's no currently-active Assignment. Past/ended assignments are allowed
+      // to be orphaned here (explicit product choice): their history still exists as Assignment
+      // records, just no longer resolvable to this specific position.
       allow delete: if canEdit();
     }
 

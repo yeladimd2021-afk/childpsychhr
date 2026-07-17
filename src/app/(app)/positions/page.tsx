@@ -176,15 +176,19 @@ export default function PositionsPage() {
   }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, positionById]);
 
   function handleDeletePosition(position: Position) {
-    const linkedAssignments = assignments.filter((a) => a.positionId === position.id);
-    if (linkedAssignments.length > 0) {
+    if (activeAssignmentByPositionId.has(position.id)) {
       window.alert(
-        `לא ניתן למחוק את התקן "${position.role ?? "ללא תפקיד"}" — יש לו היסטוריית שיבוצים (${linkedAssignments.length}). מחיקה הייתה מוחקת גם את ההיסטוריה של מי שהוחזק בתקן הזה.`
+        `לא ניתן למחוק את התקן "${position.role ?? "ללא תפקיד"}" — יש לו שיבוץ פעיל כרגע. יש לסיים או להעביר את השיבוץ קודם.`
       );
       return;
     }
+    const pastAssignments = assignments.filter((a) => a.positionId === position.id);
+    const historyWarning =
+      pastAssignments.length > 0
+        ? `\n\nלתקן זה יש היסטוריית שיבוצים (${pastAssignments.length}) — לאחר המחיקה, ההיסטוריה של מי שהוחזק בו בעבר תישאר ללא קישור לתקן.`
+        : "";
     const confirmed = window.confirm(
-      `למחוק את התקן "${position.role ?? "ללא תפקיד"}"? פעולה זו סופית ואינה ניתנת לביטול.`
+      `למחוק את התקן "${position.role ?? "ללא תפקיד"}"? פעולה זו סופית ואינה ניתנת לביטול.${historyWarning}`
     );
     if (!confirmed) return;
     deletePositionMutation.mutate({ id: position.id, before: position });

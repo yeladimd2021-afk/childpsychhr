@@ -73,9 +73,9 @@ export function useUpdatePositionMutation() {
   });
 }
 
-/** Permanently deletes a position. The caller must first confirm no Assignment (active or
- * historical) still references it — this mutation does not check, since it has no reliable
- * way to fail the write back to the user after the fact. */
+/** Permanently deletes a position. The caller must first confirm there's no currently-active
+ * Assignment (past/ended ones are allowed to be orphaned here, by explicit user choice — their
+ * history still exists as Assignment records, just no longer resolvable to this position). */
 export function useDeletePositionMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
