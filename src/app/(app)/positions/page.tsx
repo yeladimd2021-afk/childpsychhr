@@ -390,7 +390,7 @@ export default function PositionsPage() {
                 <th className="px-3 py-3 text-right">שם מלא</th>
                 <th className="px-3 py-3 text-right">ת.ז.</th>
                 <th className="px-3 py-3 text-right">טלפון</th>
-                <th className="px-3 py-3 text-right">תקן נוכחי</th>
+                <th className="px-3 py-3 text-right">תקנים ורכיבי תקציב</th>
                 <th className="px-3 py-3 text-right">יחידה (תקציבית)</th>
                 <th className="px-3 py-3 text-right">מחלקה בפועל</th>
                 <th className="px-3 py-3 text-right">תפקיד בפועל</th>
@@ -415,10 +415,31 @@ export default function PositionsPage() {
                     </td>
                     <td className="px-3 py-3">
                       {employeePositions.length > 0 ? (
-                        <div className="flex flex-col gap-0.5">
+                        <div className="flex flex-col gap-2">
                           {employeePositions.map((p) => (
-                            <span key={p.id}>{p.role ?? "תקן"}</span>
+                            <div key={p.id}>
+                              <span className="font-medium">{p.role ?? "תקן"}</span>
+                              <span className="text-foreground-subtle">
+                                {" "}
+                                — {p.employmentPercent !== null ? `${Math.round(p.employmentPercent * 100)}%` : "—"}
+                              </span>
+                              {(p.budgetComponents ?? []).map((c, i) => (
+                                <p key={i} className="pr-2 text-xs text-foreground-subtle">
+                                  {c.fundingSource} {Math.round(c.percent * 100)}%
+                                  {c.budgetNumber ? ` · ${c.budgetNumber}` : ""}
+                                </p>
+                              ))}
+                            </div>
                           ))}
+                          {employeePositions.length > 1 && (
+                            <p className="text-xs font-medium">
+                              סה&quot;כ:{" "}
+                              {Math.round(
+                                employeePositions.reduce((sum, p) => sum + (p.employmentPercent ?? 0), 0) * 100
+                              )}
+                              %
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <Badge tone="neutral">לא משובץ</Badge>
