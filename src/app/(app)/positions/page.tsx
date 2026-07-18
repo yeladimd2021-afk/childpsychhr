@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useBudgetItemsQuery, useUnitsQuery } from "@/lib/queries/useUnits";
+import { useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { PositionFormModal } from "@/components/positions/PositionFormModal";
@@ -31,7 +31,6 @@ export default function PositionsPage() {
   const editAllowed = canEdit(profile?.role);
   const { data: positions = [], isLoading: loadingPositions } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
-  const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: employees = [], isLoading: loadingEmployees } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
 
@@ -355,7 +354,6 @@ export default function PositionsPage() {
             <PositionsTable
               positions={pagedPositions}
               units={units}
-              budgetItems={budgetItems}
               employees={employees}
               assignments={assignments}
               editAllowed={editAllowed}
@@ -480,12 +478,7 @@ export default function PositionsPage() {
       )}
 
       {showCreatePosition && (
-        <PositionFormModal
-          position={null}
-          units={units}
-          budgetItems={budgetItems}
-          onClose={() => setShowCreatePosition(false)}
-        />
+        <PositionFormModal position={null} units={units} onClose={() => setShowCreatePosition(false)} />
       )}
       {showCreateEmployee && (
         <EmployeeFormModal employee={null} units={units} onClose={() => setShowCreateEmployee(false)} />

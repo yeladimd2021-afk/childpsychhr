@@ -45,6 +45,20 @@ export async function commitImportedPositions(params: {
       budgetItemRaw: row.budgetItemRaw,
       employmentPercent: row.employmentPercent,
       role: row.role,
+      // Mirrors the legacy single fundingSource/budgetItemRaw as one component, matching how
+      // scripts/migrate-budget-components.mjs backfills pre-existing positions — imported rows
+      // start with the same one-component shape.
+      budgetComponents:
+        row.employmentPercent !== null
+          ? [
+              {
+                fundingSource: row.fundingSource,
+                budgetNumber: row.budgetItemRaw ?? "",
+                percent: row.employmentPercent,
+                notes: "",
+              },
+            ]
+          : [],
       status: row.firstName
         ? row.employeeStatus === "פעיל" || row.employeeStatus === "עוזב"
           ? "מאויש"

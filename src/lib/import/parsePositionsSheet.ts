@@ -10,6 +10,7 @@ import {
   normalizeIdNumber,
   splitFullName,
 } from "./normalize";
+import type { FundingSource } from "@/lib/schemas/position";
 
 export const SOURCE_SHEET_NAME = "פירוט תקנים";
 const HEADER_ROW = 5;
@@ -20,7 +21,7 @@ export type ParsedPositionRow = {
   firstName: string | null;
   lastName: string | null;
   idNumber: string | null;
-  fundingSource: "מדינה" | "קרן" | "אחר";
+  fundingSource: FundingSource;
   startDate: number | null;
   startDateText: string | null;
   unitNameRaw: string | null;

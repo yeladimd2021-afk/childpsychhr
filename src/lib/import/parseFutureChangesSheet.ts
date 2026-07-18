@@ -5,6 +5,7 @@ import {
   normalizeEmploymentPercent,
   normalizeFundingSourceNullable,
 } from "./normalize";
+import type { FundingSource } from "@/lib/schemas/position";
 
 export const CHANGES_SHEET_NAME = "שינויים בקרוב";
 
@@ -24,7 +25,7 @@ export type ParsedFutureChangeRow = {
   employmentPercent: number | null;
   effectiveDate: number | null;
   effectiveDateText: string | null;
-  fundingSource: "מדינה" | "קרן" | "אחר" | null;
+  fundingSource: FundingSource | null;
   positionRef: string | null;
   changeType: "עזיבה" | "קליטה";
   notes: string | null;

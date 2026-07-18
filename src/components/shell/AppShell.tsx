@@ -19,6 +19,7 @@ import {
   BarChart3,
   DatabaseBackup,
   Info,
+  Landmark,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit, canManageUsers, ROLE_LABELS } from "@/lib/auth/permissions";
@@ -31,6 +32,7 @@ const NAV_ITEMS = [
   { href: "/vacancies", label: "תקנים פנויים", icon: DoorOpen },
   { href: "/changes", label: "שינויים עתידיים", icon: CalendarClock },
   { href: "/units", label: "יחידות ומחלקות", icon: Building2 },
+  { href: "/funding-sources", label: "מקורות תקציב", icon: Landmark },
   { href: "/reports", label: "דוחות", icon: BarChart3 },
   { href: "/dashboard", label: "לוח מחוונים קלאסי", icon: LayoutDashboard },
   { href: "/audit", label: "יומן שינויים", icon: History },

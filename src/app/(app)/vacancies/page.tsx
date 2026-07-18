@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
+import { useUnitsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { useAllAuditLogQuery } from "@/lib/queries/useAuditLog";
@@ -19,7 +19,6 @@ export default function VacanciesPage() {
   const { profile } = useAuth();
   const editAllowed = canEdit(profile?.role);
   const { data: units = [] } = useUnitsQuery();
-  const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: positions = [], isLoading } = usePositionsQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
@@ -98,7 +97,6 @@ export default function VacanciesPage() {
         <PositionsTable
           positions={vacantOrPartial}
           units={units}
-          budgetItems={budgetItems}
           employees={employees}
           assignments={assignments}
           editAllowed={editAllowed}

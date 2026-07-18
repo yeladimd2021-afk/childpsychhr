@@ -1,14 +1,17 @@
 "use client";
 
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Plus, Trash2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { positionFormSchema, type Position, type PositionFormValues } from "@/lib/schemas/position";
-import type { BudgetItem, Unit } from "@/lib/schemas/unit";
+import type { Unit } from "@/lib/schemas/unit";
 import {
   useCreatePositionMutation,
   useUpdatePositionMutation,
 } from "@/lib/queries/usePositions";
+
+const FUNDING_SOURCE_OPTIONS = ["מדינה", "קרן", "מחקר", "תרומה", "אחר"] as const;
 
 function toPercentInputValue(v: number | null) {
   return v !== null ? String(Math.round(v * 1000) / 10) : "";
@@ -22,7 +25,6 @@ function toDateInputValue(ts: number | null) {
 export function PositionFormModal({
   position,
   units,
-  budgetItems,
   onClose,
   readOnly = false,
   hasActiveAssignment = false,
@@ -30,7 +32,6 @@ export function PositionFormModal({
 }: {
   position: Position | null;
   units: Unit[];
-  budgetItems: BudgetItem[];
   onClose: () => void;
   readOnly?: boolean;
   /** Whether this position currently has an active Assignment — while true, status must
@@ -52,7 +53,7 @@ export function PositionFormModal({
   } = useForm<PositionFormValues>({
     resolver: zodResolver(positionFormSchema),
     defaultValues: position
-      ? { ...position, frozenUntil: position.frozenUntil ?? null }
+      ? { ...position, frozenUntil: position.frozenUntil ?? null, budgetComponents: position.budgetComponents ?? [] }
       : {
           fundingSource: "מדינה",
           unitId: null,
@@ -60,6 +61,7 @@ export function PositionFormModal({
           budgetItemRaw: null,
           employmentPercent: null,
           role: null,
+          budgetComponents: [],
           status: "פנוי",
           frozenUntil: null,
           source: "ידני",
@@ -67,6 +69,8 @@ export function PositionFormModal({
           ...prefill,
         },
   });
+
+  const { fields, append, remove } = useFieldArray({ control, name: "budgetComponents" });
 
   async function onSubmit(values: PositionFormValues) {
     if (position) {
@@ -79,17 +83,11 @@ export function PositionFormModal({
 
   const submitting = createMutation.isPending || updateMutation.isPending;
   const watchedStatus = useWatch({ control, name: "status" });
-  const unitNameById = new Map(units.map((u) => [u.id, u.name]));
-  // Budget items are listed regardless of which unit the position itself belongs to — the
-  // position's physical unit and the unit that administratively owns its budget line can
-  // legitimately differ (e.g. staff working in a department whose position is funded under a
-  // different division's budget code).
-  const budgetItemsByUnit = new Map<string, BudgetItem[]>();
-  for (const b of budgetItems) {
-    const list = budgetItemsByUnit.get(b.unitId) ?? [];
-    list.push(b);
-    budgetItemsByUnit.set(b.unitId, list);
-  }
+  const watchedPercent = useWatch({ control, name: "employmentPercent" });
+  const watchedComponents = useWatch({ control, name: "budgetComponents" }) ?? [];
+  const componentsTotal = watchedComponents.reduce((sum, c) => sum + (c?.percent ?? 0), 0);
+  const totalMismatch =
+    watchedComponents.length > 0 && watchedPercent !== null && Math.abs(componentsTotal - watchedPercent) > 0.005;
 
   return (
     <Modal title={position ? "עריכת תקן" : "הוספת תקן"} onClose={onClose} wide>
@@ -120,47 +118,7 @@ export function PositionFormModal({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">מקור תקציבי</label>
-            <select
-              {...register("fundingSource")}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <option value="מדינה">מדינה</option>
-              <option value="קרן">קרן</option>
-              <option value="אחר">אחר</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">סעיף תקציבי</label>
-            <select
-              {...register("budgetItemId")}
-              className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-            >
-              <option value="">— ללא —</option>
-              {[...budgetItemsByUnit.entries()].map(([unitId, items]) => (
-                <optgroup key={unitId} label={unitNameById.get(unitId) ?? "ללא יחידה"}>
-                  {items.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.label} ({b.code})
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            <p className="mt-1 text-xs text-foreground-subtle">
-              ניתן לבחור סעיף תקציבי מכל יחידה — לא רק מהיחידה שנבחרה למעלה, כדי לתמוך בתקנים
-              שהעובד/ת נמצא/ת בהם בפועל ביחידה אחת אך התקציב שלהם רשום תחת יחידה/אגף אחר.
-            </p>
-            {position?.budgetItemRaw && (
-              <p className="mt-1 text-xs text-foreground-subtle">
-                ערך מקורי מהאקסל: {position.budgetItemRaw}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">אחוז משרה (%)</label>
+            <label className="mb-1 block text-sm font-medium">אחוז תקן (%)</label>
             <Controller
               control={control}
               name="employmentPercent"
@@ -233,6 +191,99 @@ export function PositionFormModal({
               </p>
             </div>
           )}
+
+          <div className="sm:col-span-2">
+            <div className="mb-2 flex items-center justify-between">
+              <label className="block text-sm font-medium">רכיבי תקציב</label>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => append({ fundingSource: "מדינה", budgetNumber: "", percent: 0, notes: "" })}
+                  className="flex items-center gap-1 rounded-lg border border-brand-blue px-3 py-1.5 text-xs font-medium text-brand-blue hover:bg-brand-blue-soft"
+                >
+                  <Plus size={14} />
+                  הוסף רכיב תקציב
+                </button>
+              )}
+            </div>
+            {fields.length === 0 ? (
+              <p className="text-xs text-foreground-subtle">
+                אין עדיין רכיבי תקציב — אפשר להוסיף כמה שצריך, כל אחד עם מקור, מספר תקציב ואחוז משלו.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="grid grid-cols-1 items-start gap-2 rounded-lg border border-border p-2 sm:grid-cols-[1fr_1fr_100px_1fr_auto]"
+                  >
+                    <select
+                      {...register(`budgetComponents.${index}.fundingSource` as const)}
+                      className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                    >
+                      {FUNDING_SOURCE_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      {...register(`budgetComponents.${index}.budgetNumber` as const)}
+                      placeholder="מספר תקציב"
+                      dir="ltr"
+                      className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    <Controller
+                      control={control}
+                      name={`budgetComponents.${index}.percent` as const}
+                      render={({ field: percentField }) => (
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          placeholder="אחוז"
+                          value={toPercentInputValue(percentField.value)}
+                          onChange={(e) =>
+                            percentField.onChange(e.target.value === "" ? 0 : Number(e.target.value) / 100)
+                          }
+                          onBlur={percentField.onBlur}
+                          name={percentField.name}
+                          className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                        />
+                      )}
+                    />
+                    <input
+                      {...register(`budgetComponents.${index}.notes` as const)}
+                      placeholder="הערות"
+                      className="rounded-lg border border-border px-2 py-1.5 text-sm"
+                    />
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => remove(index)}
+                        aria-label="הסרת רכיב"
+                        title="הסרת רכיב"
+                        className="justify-self-center rounded-lg p-1.5 text-foreground-subtle hover:bg-brand-red-soft hover:text-brand-red"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <p className={`text-xs ${totalMismatch ? "text-brand-red" : "text-foreground-subtle"}`}>
+                  סה&quot;כ רכיבים: {Math.round(componentsTotal * 1000) / 10}%
+                  {watchedPercent !== null && (
+                    <>
+                      {" "}
+                      מתוך {Math.round(watchedPercent * 1000) / 10}% אחוז תקן
+                      {totalMismatch ? " — לא תואם" : " — תואם"}
+                    </>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
 
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium">הערות</label>

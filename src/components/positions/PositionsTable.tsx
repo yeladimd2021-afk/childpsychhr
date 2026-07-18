@@ -24,7 +24,7 @@ import { HistoryModal } from "@/components/shared/HistoryModal";
 import { useSetPositionStatusMutation, useDeletePositionMutation } from "@/lib/queries/usePositions";
 import { useEndAssignmentMutation } from "@/lib/queries/useAssignments";
 import type { Position } from "@/lib/schemas/position";
-import type { Unit, BudgetItem } from "@/lib/schemas/unit";
+import type { Unit } from "@/lib/schemas/unit";
 import type { Employee } from "@/lib/schemas/employee";
 import { formatEmployeeName } from "@/lib/schemas/employee";
 import type { Assignment } from "@/lib/schemas/assignment";
@@ -46,6 +46,18 @@ function pct(v: number | null) {
   return v !== null ? `${Math.round(v * 100)}%` : "—";
 }
 
+function BudgetComponentsSummary({ components }: { components: Position["budgetComponents"] }) {
+  if (!components || components.length === 0) return <span className="text-foreground-subtle">—</span>;
+  const tooltip = components
+    .map((c) => `${c.fundingSource} ${Math.round(c.percent * 100)}%${c.budgetNumber ? ` — ${c.budgetNumber}` : ""}`)
+    .join("\n");
+  return (
+    <span title={tooltip} className="cursor-help underline decoration-dotted">
+      {components.length}
+    </span>
+  );
+}
+
 /** Single shared table + row-action set for every screen that shows positions (ניהול תקנים,
  * תקנים פנויים, and each expanded unit in יחידות ומחלקות) — one place owns the modals and
  * mutations, so a fix or new action here reaches every surface automatically. Callers pass an
@@ -53,7 +65,6 @@ function pct(v: number | null) {
 export function PositionsTable({
   positions,
   units,
-  budgetItems,
   employees,
   assignments,
   editAllowed,
@@ -63,7 +74,6 @@ export function PositionsTable({
 }: {
   positions: Position[];
   units: Unit[];
-  budgetItems: BudgetItem[];
   employees: Employee[];
   assignments: Assignment[];
   editAllowed: boolean;
@@ -75,7 +85,6 @@ export function PositionsTable({
   emptyMessage?: string;
 }) {
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
-  const budgetItemById = useMemo(() => new Map(budgetItems.map((b) => [b.id, b])), [budgetItems]);
   const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const activeAssignmentByPositionId = useMemo(() => {
     const map = new Map<string, Assignment>();
@@ -277,9 +286,8 @@ export function PositionsTable({
               <th className="px-3 py-3 text-right">תפקיד</th>
               {variant === "full" && (
                 <>
-                  <th className="px-3 py-3 text-right">מקור</th>
-                  <th className="px-3 py-3 text-right">סעיף תקציבי</th>
                   <th className="px-3 py-3 text-right">אחוז תקן</th>
+                  <th className="px-3 py-3 text-right">רכיבי תקציב</th>
                 </>
               )}
               {variant === "vacant" && (
@@ -287,7 +295,7 @@ export function PositionsTable({
                   <th className="px-3 py-3 text-right">אחוז תקן כולל</th>
                   <th className="px-3 py-3 text-right">אחוז מאויש</th>
                   <th className="px-3 py-3 text-right">יתרה פנויה</th>
-                  <th className="px-3 py-3 text-right">מקור</th>
+                  <th className="px-3 py-3 text-right">רכיבי תקציב</th>
                   <th className="px-3 py-3 text-right">פנוי כמה זמן</th>
                 </>
               )}
@@ -319,11 +327,10 @@ export function PositionsTable({
                   <td className="px-3 py-3 font-medium">{p.role ?? "—"}</td>
                   {variant === "full" && (
                     <>
-                      <td className="px-3 py-3">{p.fundingSource}</td>
-                      <td className="px-3 py-3">
-                        {p.budgetItemId ? (budgetItemById.get(p.budgetItemId)?.label ?? "—") : "—"}
-                      </td>
                       <td className="px-3 py-3">{pct(p.employmentPercent)}</td>
+                      <td className="px-3 py-3">
+                        <BudgetComponentsSummary components={p.budgetComponents} />
+                      </td>
                     </>
                   )}
                   {variant === "vacant" && (
@@ -331,7 +338,9 @@ export function PositionsTable({
                       <td className="px-3 py-3">{pct(vacancy.total)}</td>
                       <td className="px-3 py-3">{pct(vacancy.filled)}</td>
                       <td className="px-3 py-3 font-medium text-brand-amber">{pct(vacancy.remaining)}</td>
-                      <td className="px-3 py-3">{p.fundingSource}</td>
+                      <td className="px-3 py-3">
+                        <BudgetComponentsSummary components={p.budgetComponents} />
+                      </td>
                       <td className="px-3 py-3">{vacantSince !== null ? `${vacantSince} ימים` : "—"}</td>
                     </>
                   )}
@@ -393,7 +402,6 @@ export function PositionsTable({
         <PositionFormModal
           position={editingPosition ?? viewingPosition}
           units={units}
-          budgetItems={budgetItems}
           onClose={() => {
             setEditingPosition(null);
             setViewingPosition(null);

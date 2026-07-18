@@ -11,15 +11,19 @@ import { computeUnitStats, round2 } from "@/lib/domain/aggregation";
 import { exportVacancyReportToExcel } from "@/lib/export/exportVacancyReport";
 import type { FundingSource } from "@/lib/schemas/position";
 
-const FUNDING_SOURCES: FundingSource[] = ["מדינה", "קרן", "אחר"];
+const FUNDING_SOURCES: FundingSource[] = ["מדינה", "קרן", "מחקר", "תרומה", "אחר"];
 const FUNDING_BAR_CLASS: Record<FundingSource, string> = {
   מדינה: "bg-brand-blue",
   קרן: "bg-brand-turquoise",
+  מחקר: "bg-brand-pink",
+  תרומה: "bg-brand-amber",
   אחר: "bg-brand-green",
 };
 const FUNDING_DOT_CLASS: Record<FundingSource, string> = {
   מדינה: "bg-brand-blue",
   קרן: "bg-brand-turquoise",
+  מחקר: "bg-brand-pink",
+  תרומה: "bg-brand-amber",
   אחר: "bg-brand-green",
 };
 

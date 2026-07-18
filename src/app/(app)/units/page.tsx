@@ -166,7 +166,6 @@ export default function UnitsPage() {
                       <PositionsTable
                         positions={unitPositions}
                         units={units}
-                        budgetItems={budgetItems}
                         employees={employees}
                         assignments={assignments}
                         editAllowed={editAllowed}
