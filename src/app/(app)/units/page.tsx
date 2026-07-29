@@ -35,10 +35,7 @@ export default function UnitsPage() {
   const deleteBudgetItemMutation = useDeleteBudgetItemMutation();
 
   function handleDeleteBudgetItem(b: BudgetItem) {
-    const code = b.code.trim();
-    const linkedPositions = positions.filter(
-      (p) => p.budgetItemId === b.id || (p.budgetComponents ?? []).some((c) => c.budgetNumber?.trim() === code)
-    );
+    const linkedPositions = positions.filter((p) => p.budgetItemId === b.id);
     if (linkedPositions.length > 0) {
       window.alert(
         `לא ניתן למחוק את "${b.label}" — ${linkedPositions.length} תקנים עדיין משויכים אליו. יש להעביר או למחוק אותם קודם.`
