@@ -27,6 +27,7 @@ export function PositionFormModal({
   position,
   units,
   existingRoles = [],
+  availableBudgetItems = [],
   onClose,
   readOnly = false,
   hasActiveAssignment = false,
@@ -38,6 +39,10 @@ export function PositionFormModal({
    * תפקיד field so a new position can reuse an existing title instead of retyping it slightly
    * differently (or the caller mistaking "add another slot" for "pick the existing one"). */
   existingRoles?: string[];
+  /** Budget items (from "יחידות ומחלקות") that still have unclaimed quota — offered as
+   * suggestions on each component's מספר תקציב field. Still free text: picking one is a
+   * convenience, not a requirement, since budgetNumber never links back to a BudgetItem id. */
+  availableBudgetItems?: { code: string; label: string; vacant: number }[];
   onClose: () => void;
   readOnly?: boolean;
   /** Whether this position currently has an active Assignment — while true, status must
@@ -117,6 +122,13 @@ export function PositionFormModal({
             <datalist id="existing-roles">
               {existingRoles.map((r) => (
                 <option key={r} value={r} />
+              ))}
+            </datalist>
+            <datalist id="available-budget-items">
+              {availableBudgetItems.map((b) => (
+                <option key={b.code} value={b.code}>
+                  {b.label} — יתרה {Math.round(b.vacant * 100) / 100}
+                </option>
               ))}
             </datalist>
             {existingRoles.length > 0 && (
@@ -231,6 +243,12 @@ export function PositionFormModal({
                 </button>
               )}
             </div>
+            {availableBudgetItems.length > 0 && (
+              <p className="mb-2 text-xs text-foreground-subtle">
+                בשדה &quot;מספר תקציב&quot; אפשר להתחיל להקליד כדי לבחור מתוך סעיפי תקציב קיימים עם
+                יתרה פנויה, או להזין מספר חדש
+              </p>
+            )}
             {fields.length === 0 ? (
               <p className="text-xs text-foreground-subtle">
                 אין עדיין רכיבי תקציב — אפשר להוסיף כמה שצריך, כל אחד עם מקור, מספר תקציב ואחוז משלו.
@@ -254,6 +272,7 @@ export function PositionFormModal({
                     </select>
                     <input
                       {...register(`budgetComponents.${index}.budgetNumber` as const)}
+                      list="available-budget-items"
                       placeholder="מספר תקציב"
                       dir="ltr"
                       className="rounded-lg border border-border px-2 py-1.5 text-sm"

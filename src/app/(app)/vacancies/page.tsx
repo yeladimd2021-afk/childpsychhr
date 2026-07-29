@@ -5,11 +5,11 @@ import { Card } from "@/components/ui/Card";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useUnitsQuery } from "@/lib/queries/useUnits";
+import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { useAllAuditLogQuery } from "@/lib/queries/useAuditLog";
-import { computePositionVacancy, round2 } from "@/lib/domain/aggregation";
+import { computePositionVacancy, computeBudgetItemStats, round2 } from "@/lib/domain/aggregation";
 import { PositionsTable } from "@/components/positions/PositionsTable";
 import { isActiveAssignment } from "@/lib/schemas/assignment";
 
@@ -19,6 +19,7 @@ export default function VacanciesPage() {
   const { profile } = useAuth();
   const editAllowed = canEdit(profile?.role);
   const { data: units = [] } = useUnitsQuery();
+  const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: positions = [], isLoading } = usePositionsQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
@@ -44,6 +45,14 @@ export default function VacanciesPage() {
     if (unitFilter) result = result.filter((p) => p.unitId === unitFilter);
     return result;
   }, [positions, activeAssignmentByPositionId, unitFilter]);
+
+  const availableBudgetItems = useMemo(
+    () =>
+      computeBudgetItemStats(budgetItems, positions)
+        .filter((s) => s.vacant > 0.001)
+        .map((s) => ({ code: s.budgetItem.code, label: s.budgetItem.label, vacant: s.vacant })),
+    [budgetItems, positions]
+  );
 
   const totalRemaining = useMemo(
     () =>
@@ -102,6 +111,7 @@ export default function VacanciesPage() {
           editAllowed={editAllowed}
           variant="vacant"
           auditEntriesAscending={auditEntriesAscending}
+          availableBudgetItems={availableBudgetItems}
           emptyMessage="אין כרגע תקנים פנויים או מאוישים חלקית"
         />
       </Card>

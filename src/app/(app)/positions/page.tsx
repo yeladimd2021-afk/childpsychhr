@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useUnitsQuery } from "@/lib/queries/useUnits";
+import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { PositionFormModal } from "@/components/positions/PositionFormModal";
@@ -16,7 +16,7 @@ import { PositionsTable } from "@/components/positions/PositionsTable";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
 import { HistoryModal } from "@/components/shared/HistoryModal";
 import { exportPositionsToExcel } from "@/lib/export/exportPositionsToExcel";
-import { computePositionsSummary } from "@/lib/domain/aggregation";
+import { computePositionsSummary, computeBudgetItemStats } from "@/lib/domain/aggregation";
 import type { Position } from "@/lib/schemas/position";
 import type { Employee } from "@/lib/schemas/employee";
 import { formatEmployeeName } from "@/lib/schemas/employee";
@@ -31,6 +31,7 @@ export default function PositionsPage() {
   const editAllowed = canEdit(profile?.role);
   const { data: positions = [], isLoading: loadingPositions } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
+  const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: employees = [], isLoading: loadingEmployees } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
 
@@ -75,6 +76,13 @@ export default function PositionsPage() {
   const roleOptions = useMemo(
     () => [...new Set(positions.map((p) => p.role).filter((r): r is string => !!r))].sort((a, b) => a.localeCompare(b, "he")),
     [positions]
+  );
+  const availableBudgetItems = useMemo(
+    () =>
+      computeBudgetItemStats(budgetItems, positions)
+        .filter((s) => s.vacant > 0.001)
+        .map((s) => ({ code: s.budgetItem.code, label: s.budgetItem.label, vacant: s.vacant })),
+    [budgetItems, positions]
   );
 
   const activeAssignmentByPositionId = useMemo(() => {
@@ -358,6 +366,7 @@ export default function PositionsPage() {
               assignments={assignments}
               editAllowed={editAllowed}
               variant="full"
+              availableBudgetItems={availableBudgetItems}
             />
           </Card>
           {totalPages > 1 && (
@@ -503,6 +512,7 @@ export default function PositionsPage() {
           position={null}
           units={units}
           existingRoles={roleOptions}
+          availableBudgetItems={availableBudgetItems}
           onClose={() => setShowCreatePosition(false)}
         />
       )}

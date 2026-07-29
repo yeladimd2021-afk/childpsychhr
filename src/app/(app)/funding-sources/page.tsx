@@ -6,10 +6,10 @@ import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
 import { canEdit } from "@/lib/auth/permissions";
 import { usePositionsQuery } from "@/lib/queries/usePositions";
-import { useUnitsQuery } from "@/lib/queries/useUnits";
+import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
-import { computeFundingSourceSummary, round2 } from "@/lib/domain/aggregation";
+import { computeFundingSourceSummary, computeBudgetItemStats, round2 } from "@/lib/domain/aggregation";
 import { PositionsTable } from "@/components/positions/PositionsTable";
 
 /** Pure financial summary, computed entirely from positions' own budgetComponents — no
@@ -19,12 +19,20 @@ export default function FundingSourcesPage() {
   const editAllowed = canEdit(profile?.role);
   const { data: positions = [], isLoading } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
+  const { data: budgetItems = [] } = useBudgetItemsQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
 
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const summary = useMemo(() => computeFundingSourceSummary(positions, assignments), [positions, assignments]);
+  const availableBudgetItems = useMemo(
+    () =>
+      computeBudgetItemStats(budgetItems, positions)
+        .filter((s) => s.vacant > 0.001)
+        .map((s) => ({ code: s.budgetItem.code, label: s.budgetItem.label, vacant: s.vacant })),
+    [budgetItems, positions]
+  );
 
   if (isLoading) return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
 
@@ -63,6 +71,7 @@ export default function FundingSourcesPage() {
                       assignments={assignments}
                       editAllowed={editAllowed}
                       variant="compact"
+                      availableBudgetItems={availableBudgetItems}
                       emptyMessage="אין תקנים עם מקור תקציב זה"
                     />
                   </div>

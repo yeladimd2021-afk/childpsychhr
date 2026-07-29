@@ -70,6 +70,7 @@ export function PositionsTable({
   editAllowed,
   variant = "full",
   auditEntriesAscending = [],
+  availableBudgetItems = [],
   emptyMessage = "לא נמצאו תקנים תואמים",
 }: {
   positions: Position[];
@@ -82,6 +83,11 @@ export function PositionsTable({
   variant?: "full" | "vacant" | "compact";
   /** Only needed for variant="vacant", to compute "כמה זמן פנוי". */
   auditEntriesAscending?: AuditLogEntry[];
+  /** Budget items with remaining quota, computed by the caller from its *unfiltered* positions
+   * list — passed through to the edit/view PositionFormModal's מספר תקציב suggestions. Computed
+   * by the page (not here), since this component only ever sees an already-filtered
+   * `positions` slice and would otherwise undercount usage from positions outside that slice. */
+  availableBudgetItems?: { code: string; label: string; vacant: number }[];
   emptyMessage?: string;
 }) {
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
@@ -407,6 +413,7 @@ export function PositionsTable({
           position={editingPosition ?? viewingPosition}
           units={units}
           existingRoles={existingRoles}
+          availableBudgetItems={availableBudgetItems}
           onClose={() => {
             setEditingPosition(null);
             setViewingPosition(null);

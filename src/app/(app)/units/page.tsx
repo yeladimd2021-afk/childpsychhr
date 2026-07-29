@@ -11,7 +11,7 @@ import { useBudgetItemsQuery, useDeleteBudgetItemMutation, useUnitsQuery } from 
 import { useFutureChangesQuery } from "@/lib/queries/useFutureChanges";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
-import { computeUnitStats, round2 } from "@/lib/domain/aggregation";
+import { computeUnitStats, computeBudgetItemStats, round2 } from "@/lib/domain/aggregation";
 import { UnitFormModal } from "@/components/units/UnitFormModal";
 import { BudgetItemFormModal } from "@/components/units/BudgetItemFormModal";
 import { PositionsTable } from "@/components/positions/PositionsTable";
@@ -35,7 +35,10 @@ export default function UnitsPage() {
   const deleteBudgetItemMutation = useDeleteBudgetItemMutation();
 
   function handleDeleteBudgetItem(b: BudgetItem) {
-    const linkedPositions = positions.filter((p) => p.budgetItemId === b.id);
+    const code = b.code.trim();
+    const linkedPositions = positions.filter(
+      (p) => p.budgetItemId === b.id || (p.budgetComponents ?? []).some((c) => c.budgetNumber?.trim() === code)
+    );
     if (linkedPositions.length > 0) {
       window.alert(
         `לא ניתן למחוק את "${b.label}" — ${linkedPositions.length} תקנים עדיין משויכים אליו. יש להעביר או למחוק אותם קודם.`
@@ -52,6 +55,13 @@ export default function UnitsPage() {
   const unitStats = useMemo(
     () => computeUnitStats(units, budgetItems, positions),
     [units, budgetItems, positions]
+  );
+  const availableBudgetItems = useMemo(
+    () =>
+      computeBudgetItemStats(budgetItems, positions)
+        .filter((s) => s.vacant > 0.001)
+        .map((s) => ({ code: s.budgetItem.code, label: s.budgetItem.label, vacant: s.vacant })),
+    [budgetItems, positions]
   );
 
   return (
@@ -170,6 +180,7 @@ export default function UnitsPage() {
                         assignments={assignments}
                         editAllowed={editAllowed}
                         variant="compact"
+                        availableBudgetItems={availableBudgetItems}
                         emptyMessage="אין עדיין תקנים ביחידה זו"
                       />
                     </div>

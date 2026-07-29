@@ -53,15 +53,24 @@ export type BudgetItemStats = {
   assignedPositions: Position[];
 };
 
+/** How much of a budget item's own quota is actually claimed, matched by its `code` against
+ * every position's budgetComponents (free text, not a foreign key — see PositionBudgetComponent)
+ * — the only link left between a BudgetItem and the positions funded from it now that a
+ * position's own budgetItemId is legacy/unused going forward. */
 export function computeBudgetItemStats(
   budgetItems: BudgetItem[],
   positions: Position[]
 ): BudgetItemStats[] {
   return budgetItems.map((budgetItem) => {
-    const assignedPositions = positions.filter((p) => p.budgetItemId === budgetItem.id);
-    const occupied = assignedPositions
-      .filter((p) => p.status === "מאויש")
-      .reduce((sum, p) => sum + (p.employmentPercent ?? 0), 0);
+    const code = budgetItem.code.trim();
+    const assignedPositions = positions.filter((p) =>
+      (p.budgetComponents ?? []).some((c) => c.budgetNumber?.trim() === code)
+    );
+    const occupied = assignedPositions.reduce((sum, p) => {
+      if (p.status !== "מאויש") return sum;
+      const component = (p.budgetComponents ?? []).find((c) => c.budgetNumber?.trim() === code);
+      return sum + (component?.percent ?? 0);
+    }, 0);
     return {
       budgetItem,
       occupied,
