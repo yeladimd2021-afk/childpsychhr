@@ -499,7 +499,12 @@ export default function PositionsPage() {
       )}
 
       {showCreatePosition && (
-        <PositionFormModal position={null} units={units} onClose={() => setShowCreatePosition(false)} />
+        <PositionFormModal
+          position={null}
+          units={units}
+          existingRoles={roleOptions}
+          onClose={() => setShowCreatePosition(false)}
+        />
       )}
       {showCreateEmployee && (
         <EmployeeFormModal employee={null} units={units} onClose={() => setShowCreateEmployee(false)} />

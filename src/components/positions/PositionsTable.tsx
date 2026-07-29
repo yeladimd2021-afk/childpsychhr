@@ -85,6 +85,10 @@ export function PositionsTable({
   emptyMessage?: string;
 }) {
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
+  const existingRoles = useMemo(
+    () => [...new Set(positions.map((p) => p.role).filter((r): r is string => !!r))].sort((a, b) => a.localeCompare(b, "he")),
+    [positions]
+  );
   const employeeById = useMemo(() => new Map(employees.map((e) => [e.id, e])), [employees]);
   const activeAssignmentByPositionId = useMemo(() => {
     const map = new Map<string, Assignment>();
@@ -402,6 +406,7 @@ export function PositionsTable({
         <PositionFormModal
           position={editingPosition ?? viewingPosition}
           units={units}
+          existingRoles={existingRoles}
           onClose={() => {
             setEditingPosition(null);
             setViewingPosition(null);

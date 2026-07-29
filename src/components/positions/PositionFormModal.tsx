@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus, Trash2 } from "lucide-react";
@@ -25,6 +26,7 @@ function toDateInputValue(ts: number | null) {
 export function PositionFormModal({
   position,
   units,
+  existingRoles = [],
   onClose,
   readOnly = false,
   hasActiveAssignment = false,
@@ -32,6 +34,10 @@ export function PositionFormModal({
 }: {
   position: Position | null;
   units: Unit[];
+  /** Distinct role names already used by other positions — offered as suggestions on the
+   * תפקיד field so a new position can reuse an existing title instead of retyping it slightly
+   * differently (or the caller mistaking "add another slot" for "pick the existing one"). */
+  existingRoles?: string[];
   onClose: () => void;
   readOnly?: boolean;
   /** Whether this position currently has an active Assignment — while true, status must
@@ -71,14 +77,22 @@ export function PositionFormModal({
   });
 
   const { fields, append, remove } = useFieldArray({ control, name: "budgetComponents" });
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   async function onSubmit(values: PositionFormValues) {
-    if (position) {
-      await updateMutation.mutateAsync({ id: position.id, before: position, values });
-    } else {
-      await createMutation.mutateAsync(values);
+    setSubmitError(null);
+    try {
+      if (position) {
+        await updateMutation.mutateAsync({ id: position.id, before: position, values });
+      } else {
+        await createMutation.mutateAsync(values);
+      }
+      onClose();
+    } catch (err) {
+      // Without this, a rejected mutation (e.g. a permissions error) previously failed
+      // completely silently — the modal just sat there with no feedback at all.
+      setSubmitError(err instanceof Error ? err.message : "שמירת התקן נכשלה. נסה/י שוב.");
     }
-    onClose();
   }
 
   const submitting = createMutation.isPending || updateMutation.isPending;
@@ -97,8 +111,19 @@ export function PositionFormModal({
             <label className="mb-1 block text-sm font-medium">תפקיד</label>
             <input
               {...register("role")}
+              list="existing-roles"
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             />
+            <datalist id="existing-roles">
+              {existingRoles.map((r) => (
+                <option key={r} value={r} />
+              ))}
+            </datalist>
+            {existingRoles.length > 0 && (
+              <p className="mt-1 text-xs text-foreground-subtle">
+                אפשר להתחיל להקליד כדי לבחור תפקיד קיים, או להזין תפקיד חדש
+              </p>
+            )}
             {errors.role && <p className="mt-1 text-xs text-brand-red">{errors.role.message}</p>}
           </div>
 
@@ -293,6 +318,17 @@ export function PositionFormModal({
               className="w-full rounded-lg border border-border px-3 py-2 text-sm"
             />
           </div>
+
+          {Object.keys(errors).length > 0 && (
+            <p className="sm:col-span-2 rounded-lg bg-brand-red-soft px-3 py-2 text-sm text-brand-red">
+              יש למלא כראוי את כל השדות המסומנים ({Object.keys(errors).join(", ")}) לפני השמירה.
+            </p>
+          )}
+          {submitError && (
+            <p className="sm:col-span-2 rounded-lg bg-brand-red-soft px-3 py-2 text-sm text-brand-red">
+              {submitError}
+            </p>
+          )}
 
           {!readOnly && (
             <div className="sm:col-span-2 flex justify-end gap-2">
