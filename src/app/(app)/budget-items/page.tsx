@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, History as HistoryIcon, Pencil } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth/AuthContext";
@@ -11,15 +11,20 @@ import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { computeBudgetItemStats, computeBudgetItemsSummary, round2 } from "@/lib/domain/aggregation";
-import { isActiveAssignment } from "@/lib/schemas/assignment";
+import { isActiveAssignment, type Assignment } from "@/lib/schemas/assignment";
 import { formatEmployeeName } from "@/lib/schemas/employee";
 import type { Employee } from "@/lib/schemas/employee";
 import { BudgetItemCard } from "@/components/budgetItems/BudgetItemCard";
 import { BudgetItemFormModal } from "@/components/units/BudgetItemFormModal";
 import { EmployeeFormModal } from "@/components/employees/EmployeeFormModal";
-import { HistoryModal } from "@/components/shared/HistoryModal";
 
 type Tab = "budgetItems" | "employees";
+
+/** Doctor budget items are conventionally labeled "פסיכיאטר/ית בכיר/ה"/"פסיכיאטר/ית מתמחה" —
+ * in a dense table that word is implied, so drop it and keep just the seniority. */
+function shortBudgetItemLabel(label: string) {
+  return label.replace(/^פסיכיאטר\/ית\s+/, "");
+}
 
 export default function BudgetItemsPage() {
   const { profile } = useAuth();
@@ -39,7 +44,6 @@ export default function BudgetItemsPage() {
   const [showCreateBudgetItem, setShowCreateBudgetItem] = useState(false);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
-  const [historyEntity, setHistoryEntity] = useState<{ id: string; label: string } | null>(null);
 
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -126,6 +130,21 @@ export default function BudgetItemsPage() {
     }
     return result;
   }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, budgetItemById]);
+
+  // One row per active assignment (a row-per-employee table hides multiple assignments in a
+  // nested list, which isn't scannable) — an unassigned employee still gets exactly one row.
+  const employeeRows = useMemo(() => {
+    const rows: { employee: Employee; assignment: Assignment | null }[] = [];
+    for (const emp of filteredEmployees) {
+      const employeeAssignments = activeAssignmentsByEmployeeId.get(emp.id) ?? [];
+      if (employeeAssignments.length === 0) {
+        rows.push({ employee: emp, assignment: null });
+      } else {
+        for (const a of employeeAssignments) rows.push({ employee: emp, assignment: a });
+      }
+    }
+    return rows;
+  }, [filteredEmployees, activeAssignmentsByEmployeeId]);
 
   if (loadingBudgetItems || loadingEmployees) {
     return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
@@ -308,95 +327,55 @@ export default function BudgetItemsPage() {
           )}
         </div>
       ) : (
-        <Card className="overflow-x-auto p-0">
+        <Card className="max-h-[70vh] overflow-y-auto p-0">
           <table className="w-full text-sm">
-            <thead className="bg-background text-xs text-foreground-subtle">
+            <thead className="sticky top-0 z-10 bg-surface text-xs text-foreground-subtle shadow-[0_1px_0_0_var(--color-border)]">
               <tr>
                 <th className="px-3 py-3 text-right">שם מלא</th>
                 <th className="px-3 py-3 text-right">ת.ז.</th>
-                <th className="px-3 py-3 text-right">טלפון</th>
-                <th className="px-3 py-3 text-right">שיבוצים</th>
-                <th className="px-3 py-3 text-right">מחלקה בפועל</th>
-                <th className="px-3 py-3 text-right">תפקיד בפועל</th>
-                <th className="px-3 py-3 text-right">הערות</th>
-                <th className="px-3 py-3 text-right"></th>
+                <th className="px-3 py-3 text-right">קרן / מדינה</th>
+                <th className="px-3 py-3 text-right">סעיף תקציב</th>
+                <th className="px-3 py-3 text-right">אחוזי משרה</th>
               </tr>
             </thead>
             <tbody>
-              {filteredEmployees.map((emp) => {
-                const employeeAssignments = activeAssignmentsByEmployeeId.get(emp.id) ?? [];
+              {employeeRows.map(({ employee: emp, assignment: a }, i) => {
+                const budgetItem = a?.budgetItemId ? budgetItemById.get(a.budgetItemId) : undefined;
                 return (
-                  <tr key={emp.id} className="border-t border-border hover:bg-background/60">
-                    <td className="px-3 py-3 font-medium">{formatEmployeeName(emp)}</td>
-                    <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
-                      {emp.idNumber ?? "—"}
+                  <tr
+                    key={a ? a.id : `${emp.id}-empty`}
+                    onClick={() => editAllowed && setEditingEmployee(emp)}
+                    className={`border-t border-border ${editAllowed ? "cursor-pointer hover:bg-background/60" : ""} ${
+                      i > 0 && employeeRows[i - 1].employee.id === emp.id ? "border-t-0" : ""
+                    }`}
+                  >
+                    <td className="px-3 py-3 font-medium">
+                      {i === 0 || employeeRows[i - 1].employee.id !== emp.id ? formatEmployeeName(emp) : ""}
                     </td>
                     <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
-                      {emp.phone ?? "—"}
+                      {i === 0 || employeeRows[i - 1].employee.id !== emp.id ? (emp.idNumber ?? "—") : ""}
                     </td>
+                    <td className="px-3 py-3">{budgetItem ? budgetItem.fundingSource : "—"}</td>
                     <td className="px-3 py-3">
-                      {employeeAssignments.length > 0 ? (
-                        <div className="flex flex-col gap-1.5">
-                          {employeeAssignments.map((a) => {
-                            const budgetItem = a.budgetItemId ? budgetItemById.get(a.budgetItemId) : undefined;
-                            return (
-                              <div key={a.id}>
-                                <span className="font-medium">{a.role ?? "ללא תפקיד"}</span>
-                                <span className="text-foreground-subtle">
-                                  {" "}
-                                  — {a.employmentPercent !== null ? `${round2(a.employmentPercent * 100)}%` : "—"}
-                                </span>
-                                {budgetItem && (
-                                  <p className="pr-2 text-xs text-foreground-subtle">
-                                    {budgetItem.code} · {budgetItem.label} ({unitNameById.get(budgetItem.unitId) ?? "—"})
-                                  </p>
-                                )}
-                              </div>
-                            );
-                          })}
-                          {employeeAssignments.length > 1 && (
-                            <p className="text-xs font-medium">
-                              סה&quot;כ:{" "}
-                              {round2(
-                                employeeAssignments.reduce((sum, a) => sum + (a.employmentPercent ?? 0), 0) * 100
-                              )}
-                              %
-                            </p>
-                          )}
-                        </div>
+                      {budgetItem ? (
+                        `${budgetItem.code} · ${shortBudgetItemLabel(budgetItem.label)}`
+                      ) : a ? (
+                        "—"
                       ) : (
                         <Badge tone="neutral">לא משובץ</Badge>
                       )}
                     </td>
                     <td className="px-3 py-3">
-                      {emp.actualUnitId ? (unitNameById.get(emp.actualUnitId) ?? "—") : "—"}
-                    </td>
-                    <td className="px-3 py-3">{emp.actualRole || "—"}</td>
-                    <td className="max-w-[200px] truncate px-3 py-3 text-foreground-subtle">{emp.notes || "—"}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setHistoryEntity({ id: emp.id, label: formatEmployeeName(emp) })}
-                          aria-label="היסטוריה"
-                          className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                        >
-                          <HistoryIcon size={16} />
-                        </button>
-                        <button
-                          onClick={() => setEditingEmployee(emp)}
-                          aria-label="עריכה"
-                          className="rounded-lg p-1.5 text-foreground-subtle hover:bg-background"
-                        >
-                          <Pencil size={16} />
-                        </button>
-                      </div>
+                      {a?.employmentPercent !== null && a?.employmentPercent !== undefined
+                        ? `${round2(a.employmentPercent * 100)}%`
+                        : "—"}
                     </td>
                   </tr>
                 );
               })}
-              {filteredEmployees.length === 0 && (
+              {employeeRows.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-foreground-subtle">
+                  <td colSpan={5} className="px-3 py-8 text-center text-foreground-subtle">
                     לא נמצאו עובדים תואמים
                   </td>
                 </tr>
@@ -418,14 +397,6 @@ export default function BudgetItemsPage() {
           units={units}
           onClose={() => setEditingEmployee(null)}
           readOnly={!editAllowed}
-        />
-      )}
-      {historyEntity && (
-        <HistoryModal
-          entityType="employee"
-          entityId={historyEntity.id}
-          entityLabel={historyEntity.label}
-          onClose={() => setHistoryEntity(null)}
         />
       )}
     </div>
