@@ -84,13 +84,17 @@ export function BudgetItemCard({
         <div className="flex-1" />
         {editAllowed && (
           <>
-            <button
-              onClick={() => setAssigning(true)}
-              className="flex items-center gap-1 rounded-lg bg-brand-blue px-3 py-1.5 text-xs font-medium text-white hover:brightness-110"
-            >
-              <UserPlus size={14} />
-              שבץ עובד
-            </button>
+            {vacant > 0.005 ? (
+              <button
+                onClick={() => setAssigning(true)}
+                className="flex items-center gap-1 rounded-lg bg-brand-blue px-3 py-1.5 text-xs font-medium text-white hover:brightness-110"
+              >
+                <UserPlus size={14} />
+                שבץ עובד
+              </button>
+            ) : (
+              <Badge tone="green">מלא</Badge>
+            )}
             <button
               onClick={() => setEditing(true)}
               aria-label="עריכת סעיף"
