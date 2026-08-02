@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/ui/Modal";
@@ -8,19 +9,27 @@ import {
   type BudgetItem,
   type BudgetItemFormValues,
 } from "@/lib/schemas/unit";
+import type { Unit } from "@/lib/schemas/unit";
+import type { FundingSource } from "@/lib/schemas/position";
 import { useCreateBudgetItemMutation, useUpdateBudgetItemMutation } from "@/lib/queries/useUnits";
+
+const FUNDING_SOURCE_OPTIONS: FundingSource[] = ["מדינה", "קרן", "מחקר", "תרומה", "אחר"];
 
 export function BudgetItemFormModal({
   unitId,
+  units,
   budgetItem,
   onClose,
 }: {
-  unitId: string;
+  /** Pre-selected unit (e.g. when adding from a specific unit's context). Still editable. */
+  unitId?: string;
+  units: Unit[];
   budgetItem: BudgetItem | null;
   onClose: () => void;
 }) {
   const createMutation = useCreateBudgetItemMutation();
   const updateMutation = useUpdateBudgetItemMutation();
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const {
     register,
@@ -30,16 +39,28 @@ export function BudgetItemFormModal({
     resolver: zodResolver(budgetItemFormSchema),
     defaultValues: budgetItem
       ? { ...budgetItem }
-      : { unitId, code: "", label: "", allocatedQuota: 0, notes: "" },
+      : {
+          unitId: unitId ?? units[0]?.id ?? "",
+          code: "",
+          label: "",
+          fundingSource: "מדינה",
+          allocatedQuota: 0,
+          notes: "",
+        },
   });
 
   async function onSubmit(values: BudgetItemFormValues) {
-    if (budgetItem) {
-      await updateMutation.mutateAsync({ id: budgetItem.id, before: budgetItem, values });
-    } else {
-      await createMutation.mutateAsync(values);
+    setSubmitError(null);
+    try {
+      if (budgetItem) {
+        await updateMutation.mutateAsync({ id: budgetItem.id, before: budgetItem, values });
+      } else {
+        await createMutation.mutateAsync(values);
+      }
+      onClose();
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "שמירת סעיף התקציב נכשלה. נסה/י שוב.");
     }
-    onClose();
   }
 
   const submitting = createMutation.isPending || updateMutation.isPending;
@@ -48,15 +69,16 @@ export function BudgetItemFormModal({
     <Modal title={budgetItem ? "עריכת סעיף תקציב" : "הוספת סעיף תקציב"} onClose={onClose}>
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">קוד סעיף</label>
+          <label className="mb-1 block text-sm font-medium">מספר סעיף תקציב</label>
           <input
             {...register("code")}
             dir="ltr"
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
+          {errors.code && <p className="mt-1 text-xs text-brand-red">{errors.code.message}</p>}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">תיאור</label>
+          <label className="mb-1 block text-sm font-medium">שם / תיאור</label>
           <input
             {...register("label")}
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
@@ -64,7 +86,33 @@ export function BudgetItemFormModal({
           {errors.label && <p className="mt-1 text-xs text-brand-red">{errors.label.message}</p>}
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">תקן מוקצה</label>
+          <label className="mb-1 block text-sm font-medium">יחידה</label>
+          <select
+            {...register("unitId")}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          >
+            {units.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">מקור תקציב</label>
+          <select
+            {...register("fundingSource")}
+            className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+          >
+            {FUNDING_SOURCE_OPTIONS.map((f) => (
+              <option key={f} value={f}>
+                {f}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">סך היקף תקנים מאושר</label>
           <input
             type="number"
             step="0.01"
@@ -80,6 +128,14 @@ export function BudgetItemFormModal({
             className="w-full rounded-lg border border-border px-3 py-2 text-sm"
           />
         </div>
+        {Object.keys(errors).length > 0 && (
+          <p className="rounded-lg bg-brand-red-soft px-3 py-2 text-xs text-brand-red">
+            יש למלא כראוי את כל השדות המסומנים ({Object.keys(errors).join(", ")}) לפני השמירה.
+          </p>
+        )}
+        {submitError && (
+          <p className="rounded-lg bg-brand-red-soft px-3 py-2 text-xs text-brand-red">{submitError}</p>
+        )}
         <div className="flex justify-end gap-2">
           <button
             type="button"

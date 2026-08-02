@@ -1,14 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createDoc, listDocs, updateDocById } from "@/lib/data/dataClient";
-import { recordHistoryEntry } from "@/lib/firebase/history";
+import { diffFields, recordHistoryEntry } from "@/lib/firebase/history";
 import type { Assignment } from "@/lib/schemas/assignment";
 import type { EmployeeFormValues } from "@/lib/schemas/employee";
 import { formatEmployeeName } from "@/lib/schemas/employee";
-import type { Position } from "@/lib/schemas/position";
+import type { BudgetItem } from "@/lib/schemas/unit";
 import { useAuth } from "@/lib/auth/AuthContext";
 
 const COLLECTION = "assignments";
-const POSITIONS = "positions";
 const EMPLOYEES = "employees";
 
 async function fetchAssignments(): Promise<Assignment[]> {
@@ -19,22 +18,29 @@ export function useAssignmentsQuery() {
   return useQuery({ queryKey: [COLLECTION], queryFn: fetchAssignments });
 }
 
-type AssignEmployeeInput = {
-  position: Position;
+function budgetItemLabel(b: Pick<BudgetItem, "code" | "label">) {
+  return `${b.code} · ${b.label}`;
+}
+
+type AssignToBudgetItemInput = {
+  budgetItem: BudgetItem;
   employee: { mode: "existing"; employeeId: string; label: string } | { mode: "new"; values: EmployeeFormValues };
+  role: string | null;
   startDate: number | null;
   startDateText: string | null;
+  endDate: number | null;
   employmentPercent: number | null;
   notes?: string;
 };
 
-/** Assigns an employee (existing or newly created) to a currently-vacant position: creates
- * the Assignment, and flips the position to מאויש — a single user action spans 2-3 entities. */
-export function useAssignEmployeeMutation() {
+/** Assigns an employee (existing or newly created) directly to a budget item: creates the
+ * Assignment record. Position is never involved — from the user's point of view, this is the
+ * one and only "add a person" action. */
+export function useAssignToBudgetItemMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
   return useMutation({
-    mutationFn: async (input: AssignEmployeeInput) => {
+    mutationFn: async (input: AssignToBudgetItemInput) => {
       const now = Date.now();
       const changedBy = user?.uid ?? "unknown";
       const changedByName = profile?.displayName ?? "unknown";
@@ -64,11 +70,13 @@ export function useAssignEmployeeMutation() {
 
       const assignmentId = await createDoc(COLLECTION, {
         employeeId,
-        positionId: input.position.id,
+        budgetItemId: input.budgetItem.id,
+        positionId: null,
+        role: input.role,
         startDate: input.startDate,
         startDateText: input.startDateText,
-        endDate: null,
-        employmentPercent: input.employmentPercent ?? input.position.employmentPercent,
+        endDate: input.endDate,
+        employmentPercent: input.employmentPercent,
         notes: input.notes ?? "",
         createdAt: now,
         updatedAt: now,
@@ -76,20 +84,9 @@ export function useAssignEmployeeMutation() {
       await recordHistoryEntry({
         entityType: "assignment",
         entityId: assignmentId,
-        entityLabel: `${employeeLabel} → ${input.position.role ?? "תקן"}`,
+        entityLabel: `${employeeLabel} → ${budgetItemLabel(input.budgetItem)}`,
         action: "create",
         changes: [],
-        changedBy,
-        changedByName,
-      });
-
-      await updateDocById(POSITIONS, input.position.id, { status: "מאויש", updatedAt: now });
-      await recordHistoryEntry({
-        entityType: "position",
-        entityId: input.position.id,
-        entityLabel: input.position.role ?? "תקן",
-        action: "update",
-        changes: [{ field: "status", oldValue: input.position.status, newValue: "מאויש" }],
         changedBy,
         changedByName,
       });
@@ -98,26 +95,25 @@ export function useAssignEmployeeMutation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [COLLECTION] });
-      queryClient.invalidateQueries({ queryKey: [POSITIONS] });
       queryClient.invalidateQueries({ queryKey: [EMPLOYEES] });
     },
   });
 }
 
-/** Ends an active assignment (sets endDate) and frees up the position — the assignment
- * itself is kept, not deleted, so "who held this before" history survives. */
+/** Ends an active assignment (sets endDate) — the assignment itself is kept, not deleted, so
+ * "who was assigned here before" history survives. */
 export function useEndAssignmentMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
   return useMutation({
     mutationFn: async ({
       assignment,
-      position,
       employeeLabel,
+      budgetItem,
     }: {
       assignment: Assignment;
-      position: Position;
       employeeLabel: string;
+      budgetItem: BudgetItem;
     }) => {
       const now = Date.now();
       const changedBy = user?.uid ?? "unknown";
@@ -127,52 +123,90 @@ export function useEndAssignmentMutation() {
       await recordHistoryEntry({
         entityType: "assignment",
         entityId: assignment.id,
-        entityLabel: `${employeeLabel} → ${position.role ?? "תקן"}`,
+        entityLabel: `${employeeLabel} → ${budgetItemLabel(budgetItem)}`,
         action: "update",
         changes: [{ field: "endDate", oldValue: null, newValue: now }],
-        changedBy,
-        changedByName,
-      });
-
-      await updateDocById(POSITIONS, position.id, { status: "פנוי", updatedAt: now });
-      await recordHistoryEntry({
-        entityType: "position",
-        entityId: position.id,
-        entityLabel: position.role ?? "תקן",
-        action: "update",
-        changes: [{ field: "status", oldValue: position.status, newValue: "פנוי" }],
         changedBy,
         changedByName,
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [COLLECTION] });
-      queryClient.invalidateQueries({ queryKey: [POSITIONS] });
     },
   });
 }
 
-/** Moves an employee from their current position to a different (vacant) one in a single
- * action: closes the old assignment, opens a new one, and flips both positions' status —
- * the whole point of separating Position/Employee/Assignment in the first place. */
+type UpdateAssignmentValues = {
+  role: string | null;
+  employmentPercent: number | null;
+  startDate: number | null;
+  startDateText: string | null;
+  endDate: number | null;
+  notes?: string;
+};
+
+/** Edits an existing assignment's own fields (role/percent/dates/notes) without touching who
+ * it's linked to. */
+export function useUpdateAssignmentMutation() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      id,
+      before,
+      values,
+      employeeLabel,
+      budgetItem,
+    }: {
+      id: string;
+      before: Assignment;
+      values: UpdateAssignmentValues;
+      employeeLabel: string;
+      budgetItem: BudgetItem;
+    }) => {
+      const now = Date.now();
+      const changedBy = user?.uid ?? "unknown";
+      const changedByName = profile?.displayName ?? "unknown";
+
+      await updateDocById(COLLECTION, id, { ...values, updatedAt: now });
+      await recordHistoryEntry({
+        entityType: "assignment",
+        entityId: id,
+        entityLabel: `${employeeLabel} → ${budgetItemLabel(budgetItem)}`,
+        action: "update",
+        changes: diffFields(before, { ...values, notes: values.notes ?? "" }),
+        changedBy,
+        changedByName,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [COLLECTION] });
+    },
+  });
+}
+
+/** Moves an employee from their current budget item to a different one in a single action:
+ * closes the old assignment, opens a new one. */
 export function useTransferAssignmentMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();
   return useMutation({
     mutationFn: async ({
       currentAssignment,
-      currentPosition,
-      targetPosition,
+      currentBudgetItem,
+      targetBudgetItem,
       employeeLabel,
+      role,
       startDate,
       startDateText,
       employmentPercent,
       notes,
     }: {
       currentAssignment: Assignment;
-      currentPosition: Position;
-      targetPosition: Position;
+      currentBudgetItem: BudgetItem;
+      targetBudgetItem: BudgetItem;
       employeeLabel: string;
+      role: string | null;
       startDate: number | null;
       startDateText: string | null;
       employmentPercent: number | null;
@@ -186,31 +220,22 @@ export function useTransferAssignmentMutation() {
       await recordHistoryEntry({
         entityType: "assignment",
         entityId: currentAssignment.id,
-        entityLabel: `${employeeLabel} → ${currentPosition.role ?? "תקן"}`,
+        entityLabel: `${employeeLabel} → ${budgetItemLabel(currentBudgetItem)}`,
         action: "update",
         changes: [{ field: "endDate", oldValue: null, newValue: now }],
         changedBy,
         changedByName,
       });
 
-      await updateDocById(POSITIONS, currentPosition.id, { status: "פנוי", updatedAt: now });
-      await recordHistoryEntry({
-        entityType: "position",
-        entityId: currentPosition.id,
-        entityLabel: currentPosition.role ?? "תקן",
-        action: "update",
-        changes: [{ field: "status", oldValue: currentPosition.status, newValue: "פנוי" }],
-        changedBy,
-        changedByName,
-      });
-
       const newAssignmentId = await createDoc(COLLECTION, {
         employeeId: currentAssignment.employeeId,
-        positionId: targetPosition.id,
+        budgetItemId: targetBudgetItem.id,
+        positionId: null,
+        role,
         startDate,
         startDateText,
         endDate: null,
-        employmentPercent: employmentPercent ?? targetPosition.employmentPercent,
+        employmentPercent,
         notes: notes ?? "",
         createdAt: now,
         updatedAt: now,
@@ -218,20 +243,9 @@ export function useTransferAssignmentMutation() {
       await recordHistoryEntry({
         entityType: "assignment",
         entityId: newAssignmentId,
-        entityLabel: `${employeeLabel} → ${targetPosition.role ?? "תקן"}`,
+        entityLabel: `${employeeLabel} → ${budgetItemLabel(targetBudgetItem)}`,
         action: "create",
         changes: [],
-        changedBy,
-        changedByName,
-      });
-
-      await updateDocById(POSITIONS, targetPosition.id, { status: "מאויש", updatedAt: now });
-      await recordHistoryEntry({
-        entityType: "position",
-        entityId: targetPosition.id,
-        entityLabel: targetPosition.role ?? "תקן",
-        action: "update",
-        changes: [{ field: "status", oldValue: targetPosition.status, newValue: "מאויש" }],
         changedBy,
         changedByName,
       });
@@ -240,7 +254,6 @@ export function useTransferAssignmentMutation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [COLLECTION] });
-      queryClient.invalidateQueries({ queryKey: [POSITIONS] });
     },
   });
 }

@@ -1,29 +1,36 @@
 import ExcelJS from "exceljs";
-import type { Position } from "@/lib/schemas/position";
 import type { Unit } from "@/lib/schemas/unit";
+import type { BudgetItemStats } from "@/lib/domain/aggregation";
+import { round2 } from "@/lib/domain/aggregation";
 
-export async function exportVacancyReportToExcel(vacantPositions: Position[], units: Unit[]) {
+export async function exportVacancyReportToExcel(vacantItemStats: BudgetItemStats[], units: Unit[]) {
   const unitNameById = new Map(units.map((u) => [u.id, u.name]));
 
   const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("תקנים פנויים", { views: [{ rightToLeft: true }] });
+  const sheet = workbook.addWorksheet("סעיפי תקציב עם יתרה פנויה", { views: [{ rightToLeft: true }] });
 
   sheet.columns = [
-    { header: "תפקיד", key: "role", width: 20 },
+    { header: "מספר סעיף", key: "code", width: 14 },
+    { header: "שם / תיאור", key: "label", width: 24 },
     { header: "יחידה", key: "unit", width: 22 },
-    { header: "מדינה / קרן", key: "fundingSource", width: 12 },
-    { header: "אחוזי משרה", key: "employmentPercent", width: 12 },
+    { header: "מקור תקציב", key: "fundingSource", width: 12 },
+    { header: "מאושר", key: "allocatedQuota", width: 10 },
+    { header: "מאויש", key: "occupied", width: 10 },
+    { header: "פנוי", key: "vacant", width: 10 },
     { header: "הערות", key: "notes", width: 30 },
   ];
   sheet.getRow(1).font = { bold: true };
 
-  for (const p of vacantPositions) {
+  for (const s of vacantItemStats) {
     sheet.addRow({
-      role: p.role ?? "",
-      unit: p.unitId ? (unitNameById.get(p.unitId) ?? "") : "",
-      fundingSource: p.fundingSource,
-      employmentPercent: p.employmentPercent !== null ? `${Math.round(p.employmentPercent * 100)}%` : "",
-      notes: p.notes ?? "",
+      code: s.budgetItem.code,
+      label: s.budgetItem.label,
+      unit: unitNameById.get(s.budgetItem.unitId) ?? "",
+      fundingSource: s.budgetItem.fundingSource,
+      allocatedQuota: round2(s.budgetItem.allocatedQuota),
+      occupied: round2(s.occupied),
+      vacant: round2(s.vacant),
+      notes: s.budgetItem.notes ?? "",
     });
   }
 
@@ -34,7 +41,7 @@ export async function exportVacancyReportToExcel(vacantPositions: Position[], un
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `תקנים-פנויים-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  a.download = `סעיפי-תקציב-פנויים-${new Date().toISOString().slice(0, 10)}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 }

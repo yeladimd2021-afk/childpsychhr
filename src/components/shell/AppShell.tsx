@@ -6,8 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   LayoutGrid,
-  Users,
-  DoorOpen,
+  Wallet,
   CalendarClock,
   Building2,
   History,
@@ -28,8 +27,7 @@ import { APP_DEPARTMENT, APP_NAME, APP_SUBTITLE, APP_VERSION } from "@/lib/brand
 
 const NAV_ITEMS = [
   { href: "/", label: "מרכז שליטה ניהולי", icon: LayoutGrid },
-  { href: "/positions", label: "ניהול תקנים", icon: Users },
-  { href: "/vacancies", label: "תקנים פנויים", icon: DoorOpen },
+  { href: "/budget-items", label: "סעיפי תקציב ותקינה", icon: Wallet },
   { href: "/changes", label: "שינויים עתידיים", icon: CalendarClock },
   { href: "/units", label: "יחידות ומחלקות", icon: Building2 },
   { href: "/funding-sources", label: "מקורות תקציב", icon: Landmark },

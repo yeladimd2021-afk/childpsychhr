@@ -100,7 +100,9 @@ export async function exportAllToExcel() {
     "שיבוצים",
     [
       { header: "עובד", key: "employee", width: 20 },
-      { header: "תקן", key: "position", width: 20 },
+      { header: "תפקיד", key: "role", width: 18 },
+      { header: "סעיף תקציב", key: "budgetItem", width: 20 },
+      { header: "תקן (היסטורי)", key: "position", width: 20 },
       { header: "תאריך התחלה", key: "startDate", width: 14 },
       { header: "תאריך סיום", key: "endDate", width: 14 },
       { header: "אחוז משרה", key: "employmentPercent", width: 12 },
@@ -108,7 +110,9 @@ export async function exportAllToExcel() {
     ],
     assignments.map((a) => ({
       employee: formatEmployeeName(employeeById.get(a.employeeId)),
-      position: positionById.get(a.positionId)?.role ?? "תקן",
+      role: a.role ?? "",
+      budgetItem: a.budgetItemId ? (budgetItemLabelById.get(a.budgetItemId) ?? "") : "",
+      position: a.positionId ? (positionById.get(a.positionId)?.role ?? "") : "",
       startDate: a.startDate ? new Date(a.startDate).toLocaleDateString("he-IL") : "",
       endDate: a.endDate ? new Date(a.endDate).toLocaleDateString("he-IL") : "",
       employmentPercent: a.employmentPercent !== null ? `${Math.round(a.employmentPercent * 100)}%` : "",
@@ -134,6 +138,7 @@ export async function exportAllToExcel() {
       { header: "יחידה", key: "unit", width: 20 },
       { header: "קוד", key: "code", width: 12 },
       { header: "תיאור", key: "label", width: 20 },
+      { header: "מקור תקציב", key: "fundingSource", width: 12 },
       { header: "תקן מוקצה", key: "allocatedQuota", width: 12 },
       { header: "הערות", key: "notes", width: 30 },
     ],
@@ -141,6 +146,7 @@ export async function exportAllToExcel() {
       unit: unitNameById.get(b.unitId) ?? "",
       code: b.code,
       label: b.label,
+      fundingSource: b.fundingSource,
       allocatedQuota: b.allocatedQuota,
       notes: b.notes ?? "",
     }))

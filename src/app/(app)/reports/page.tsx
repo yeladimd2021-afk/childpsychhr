@@ -4,10 +4,10 @@ import { useMemo } from "react";
 import { Building2, Users, DoorOpen, Percent, Download } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { usePositionsQuery } from "@/lib/queries/usePositions";
 import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
-import { computeUnitStats, round2 } from "@/lib/domain/aggregation";
+import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
+import { computeUnitStats, computeBudgetItemStats, round2 } from "@/lib/domain/aggregation";
 import { exportVacancyReportToExcel } from "@/lib/export/exportVacancyReport";
 import type { FundingSource } from "@/lib/schemas/position";
 
@@ -28,14 +28,14 @@ const FUNDING_DOT_CLASS: Record<FundingSource, string> = {
 };
 
 export default function ReportsPage() {
-  const { data: positions = [], isLoading } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
-  const { data: budgetItems = [] } = useBudgetItemsQuery();
+  const { data: budgetItems = [], isLoading } = useBudgetItemsQuery();
   const { data: employees = [] } = useEmployeesQuery();
+  const { data: assignments = [] } = useAssignmentsQuery();
 
   const unitStats = useMemo(
-    () => computeUnitStats(units, budgetItems, positions),
-    [units, budgetItems, positions]
+    () => computeUnitStats(units, budgetItems, assignments),
+    [units, budgetItems, assignments]
   );
 
   const totals = useMemo(() => {
@@ -48,19 +48,16 @@ export default function ReportsPage() {
   }, [unitStats]);
 
   const fundingBreakdown = useMemo(() => {
-    const total = positions.length || 1;
+    const total = budgetItems.length || 1;
     return FUNDING_SOURCES.map((label) => {
-      const count = positions.filter((p) => p.fundingSource === label).length;
+      const count = budgetItems.filter((b) => b.fundingSource === label).length;
       return { label, count, pct: round2((count / total) * 100) };
     });
-  }, [positions]);
+  }, [budgetItems]);
 
-  const vacantPositions = useMemo(
-    () => positions.filter((p) => p.status === "פנוי"),
-    [positions]
-  );
+  const allItemStats = useMemo(() => computeBudgetItemStats(budgetItems, assignments), [budgetItems, assignments]);
+  const vacantItemStats = useMemo(() => allItemStats.filter((s) => s.vacant > 0.005), [allItemStats]);
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
-  const budgetItemById = useMemo(() => new Map(budgetItems.map((b) => [b.id, b])), [budgetItems]);
 
   if (isLoading) return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
 
@@ -141,12 +138,12 @@ export default function ReportsPage() {
       <Card>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-medium">דוח תקנים פנויים</h2>
-            <p className="mt-1 text-xs text-foreground-subtle">{vacantPositions.length} תקנים פנויים כרגע</p>
+            <h2 className="font-medium">דוח סעיפי תקציב עם יתרה פנויה</h2>
+            <p className="mt-1 text-xs text-foreground-subtle">{vacantItemStats.length} סעיפים עם יתרה פנויה כרגע</p>
           </div>
           <button
-            onClick={() => exportVacancyReportToExcel(vacantPositions, units)}
-            disabled={vacantPositions.length === 0}
+            onClick={() => exportVacancyReportToExcel(vacantItemStats, units)}
+            disabled={vacantItemStats.length === 0}
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-background disabled:opacity-60"
           >
             <Download size={16} />
@@ -157,35 +154,31 @@ export default function ReportsPage() {
           <table className="w-full text-sm">
             <thead className="bg-background text-xs text-foreground-subtle">
               <tr>
-                <th className="px-3 py-3 text-right">תפקיד</th>
+                <th className="px-3 py-3 text-right">מספר סעיף</th>
+                <th className="px-3 py-3 text-right">שם / תיאור</th>
                 <th className="px-3 py-3 text-right">יחידה</th>
-                <th className="px-3 py-3 text-right">סעיף תקציב</th>
                 <th className="px-3 py-3 text-right">מקור</th>
-                <th className="px-3 py-3 text-right">%</th>
-                <th className="px-3 py-3 text-right">הערות</th>
+                <th className="px-3 py-3 text-right">מאושר</th>
+                <th className="px-3 py-3 text-right">מאויש</th>
+                <th className="px-3 py-3 text-right">פנוי</th>
               </tr>
             </thead>
             <tbody>
-              {vacantPositions.map((p) => (
-                <tr key={p.id} className="border-t border-border">
-                  <td className="px-3 py-3 font-medium">{p.role ?? "—"}</td>
-                  <td className="px-3 py-3">{p.unitId ? (unitNameById.get(p.unitId) ?? "—") : "—"}</td>
-                  <td className="px-3 py-3">
-                    {p.budgetItemId ? (budgetItemById.get(p.budgetItemId)?.label ?? "—") : "—"}
-                  </td>
-                  <td className="px-3 py-3">{p.fundingSource}</td>
-                  <td className="px-3 py-3">
-                    {p.employmentPercent !== null ? `${Math.round(p.employmentPercent * 100)}%` : "—"}
-                  </td>
-                  <td className="max-w-[200px] truncate px-3 py-3 text-foreground-subtle">
-                    {p.notes || "—"}
-                  </td>
+              {vacantItemStats.map((s) => (
+                <tr key={s.budgetItem.id} className="border-t border-border">
+                  <td dir="ltr" className="px-3 py-3 text-left font-medium">{s.budgetItem.code}</td>
+                  <td className="px-3 py-3">{s.budgetItem.label}</td>
+                  <td className="px-3 py-3">{unitNameById.get(s.budgetItem.unitId) ?? "—"}</td>
+                  <td className="px-3 py-3">{s.budgetItem.fundingSource}</td>
+                  <td className="px-3 py-3">{round2(s.budgetItem.allocatedQuota)}</td>
+                  <td className="px-3 py-3">{round2(s.occupied)}</td>
+                  <td className="px-3 py-3">{round2(s.vacant)}</td>
                 </tr>
               ))}
-              {vacantPositions.length === 0 && (
+              {vacantItemStats.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-foreground-subtle">
-                    אין כרגע תקנים פנויים
+                  <td colSpan={7} className="px-3 py-8 text-center text-foreground-subtle">
+                    אין כרגע סעיפי תקציב עם יתרה פנויה
                   </td>
                 </tr>
               )}

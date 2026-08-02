@@ -1,33 +1,31 @@
-import type { Position } from "@/lib/schemas/position";
+import type { BudgetItem } from "@/lib/schemas/unit";
 import type { Employee } from "@/lib/schemas/employee";
 import type { Assignment } from "@/lib/schemas/assignment";
-import { isActiveAssignment } from "@/lib/schemas/assignment";
+import { computeBudgetItemStats } from "@/lib/domain/aggregation";
 
-export type PositionException = {
-  position: Position;
+export type BudgetItemException = {
+  budgetItem: BudgetItem;
   reason: string;
 };
 
-export function findPositionExceptions(
-  positions: Position[],
-  assignments: Assignment[]
-): PositionException[] {
-  const exceptions: PositionException[] = [];
-  const activeAssignmentByPositionId = new Map<string, Assignment>();
-  for (const a of assignments) {
-    if (isActiveAssignment(a)) activeAssignmentByPositionId.set(a.positionId, a);
-  }
+export function findBudgetItemExceptions(budgetItems: BudgetItem[], assignments: Assignment[]): BudgetItemException[] {
+  const exceptions: BudgetItemException[] = [];
+  const stats = computeBudgetItemStats(budgetItems, assignments);
 
-  for (const p of positions) {
-    const hasActiveAssignment = activeAssignmentByPositionId.has(p.id);
-    if (p.status === "מאויש" && !hasActiveAssignment) {
-      exceptions.push({ position: p, reason: 'תקן מסומן "מאויש" ללא שיבוץ עובד פעיל' });
+  for (const s of stats) {
+    if (s.overCapacity) {
+      exceptions.push({
+        budgetItem: s.budgetItem,
+        reason: `סך השיבוצים (${s.occupied}) חורג מהתקן המאושר (${s.budgetItem.allocatedQuota})`,
+      });
     }
-    if (p.status !== "מאויש" && hasActiveAssignment) {
-      exceptions.push({ position: p, reason: "תקן עם שיבוץ פעיל אך לא מסומן כמאויש" });
-    }
-    if (p.status === "מאויש" && p.employmentPercent === null) {
-      exceptions.push({ position: p, reason: "תקן מאויש ללא אחוזי משרה" });
+    for (const a of s.activeAssignments) {
+      if (a.employmentPercent === null) {
+        exceptions.push({ budgetItem: s.budgetItem, reason: "שיבוץ פעיל ללא אחוז משרה" });
+      }
+      if (!a.role) {
+        exceptions.push({ budgetItem: s.budgetItem, reason: "שיבוץ פעיל ללא תפקיד מוגדר" });
+      }
     }
   }
 

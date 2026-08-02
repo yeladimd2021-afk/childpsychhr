@@ -5,27 +5,25 @@ import { Users, DoorOpen, Building2, AlertTriangle, UserPlus, UserMinus } from "
 import { KpiCard } from "@/components/ui/KpiCard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { usePositionsQuery } from "@/lib/queries/usePositions";
 import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useFutureChangesQuery } from "@/lib/queries/useFutureChanges";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { computeUnitStats, round2 } from "@/lib/domain/aggregation";
-import { findEmployeeExceptions, findPositionExceptions } from "@/lib/domain/exceptions";
+import { findEmployeeExceptions, findBudgetItemExceptions } from "@/lib/domain/exceptions";
 
-const FUNDING_LABELS = ["מדינה", "קרן", "אחר"] as const;
+const FUNDING_LABELS = ["מדינה", "קרן", "מחקר", "תרומה", "אחר"] as const;
 
 export default function DashboardPage() {
-  const { data: positions = [], isLoading: loadingPositions } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
-  const { data: budgetItems = [] } = useBudgetItemsQuery();
+  const { data: budgetItems = [], isLoading: loadingBudgetItems } = useBudgetItemsQuery();
   const { data: futureChanges = [] } = useFutureChangesQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
 
   const unitStats = useMemo(
-    () => computeUnitStats(units, budgetItems, positions),
-    [units, budgetItems, positions]
+    () => computeUnitStats(units, budgetItems, assignments),
+    [units, budgetItems, assignments]
   );
 
   const totals = useMemo(() => {
@@ -40,25 +38,16 @@ export default function DashboardPage() {
   const fundingBreakdown = useMemo(() => {
     return FUNDING_LABELS.map((label) => ({
       label,
-      count: positions.filter((p) => p.fundingSource === label).length,
+      count: budgetItems.filter((b) => b.fundingSource === label).length,
     }));
-  }, [positions]);
+  }, [budgetItems]);
 
-  const positionExceptions = useMemo(
-    () => findPositionExceptions(positions, assignments),
-    [positions, assignments]
+  const budgetItemExceptions = useMemo(
+    () => findBudgetItemExceptions(budgetItems, assignments),
+    [budgetItems, assignments]
   );
   const employeeExceptions = useMemo(() => findEmployeeExceptions(employees), [employees]);
-  const exceptionCount = positionExceptions.length + employeeExceptions.length;
-
-  const dataSourceLabel = useMemo(() => {
-    if (positions.length === 0) return "אין נתונים עדיין";
-    const hasImport = positions.some((p) => p.source === "ייבוא");
-    const hasManual = positions.some((p) => p.source === "ידני");
-    if (hasImport && hasManual) return "משולב — הזנה ידנית + ייבוא מאקסל";
-    if (hasImport) return "ייבוא מאקסל";
-    return "הזנה ידנית";
-  }, [positions]);
+  const exceptionCount = budgetItemExceptions.length + employeeExceptions.length;
 
   const joining = futureChanges.filter((c) => c.changeType === "קליטה" && c.status !== "בוצע");
   const leaving = futureChanges.filter((c) => c.changeType === "עזיבה" && c.status !== "בוצע");
@@ -74,18 +63,15 @@ export default function DashboardPage() {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [futureChanges]);
 
-  if (loadingPositions) {
+  if (loadingBudgetItems) {
     return <div className="p-8 text-sm text-foreground-subtle">טוען נתונים...</div>;
   }
 
   return (
     <div className="flex flex-col gap-6 p-6 md:p-8">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-semibold">לוח מחוונים קלאסי</h1>
-          <p className="mt-1 text-sm text-foreground-subtle">תמונת מצב מלאה של תקני האגף</p>
-        </div>
-        <Badge tone="blue">מקור הנתונים: {dataSourceLabel}</Badge>
+      <div>
+        <h1 className="text-xl font-semibold">לוח מחוונים קלאסי</h1>
+        <p className="mt-1 text-sm text-foreground-subtle">תמונת מצב מלאה של תקני האגף</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -227,12 +213,14 @@ export default function DashboardPage() {
           <p className="text-sm text-foreground-subtle">לא נמצאו חריגות — הכל תקין.</p>
         ) : (
           <div className="flex flex-col gap-2">
-            {positionExceptions.slice(0, 20).map((e, i) => (
+            {budgetItemExceptions.slice(0, 20).map((e, i) => (
               <div
-                key={`p-${i}`}
+                key={`b-${i}`}
                 className="flex items-center justify-between rounded-lg bg-brand-red-soft px-3 py-2 text-sm"
               >
-                <span>{e.position.role ?? "תקן"}</span>
+                <span>
+                  {e.budgetItem.code} · {e.budgetItem.label}
+                </span>
                 <span className="text-brand-red">{e.reason}</span>
               </div>
             ))}
@@ -249,7 +237,7 @@ export default function DashboardPage() {
             ))}
             {exceptionCount > 20 && (
               <p className="text-xs text-foreground-subtle">
-                ועוד {exceptionCount - 20} חריגות נוספות — ראה/י מסך עובדים ותקנים
+                ועוד {exceptionCount - 20} חריגות נוספות — ראה/י מסך סעיפי תקציב ותקינה
               </p>
             )}
           </div>

@@ -106,6 +106,8 @@ export async function commitImportedPositions(params: {
       const wasCurrentlyActive = row.employeeStatus === "פעיל" || row.employeeStatus === "עוזב";
       const assignmentValues: AssignmentFormValues = {
         employeeId,
+        budgetItemId: null,
+        role: row.role,
         positionId,
         startDate: row.startDate,
         startDateText: row.startDateText,

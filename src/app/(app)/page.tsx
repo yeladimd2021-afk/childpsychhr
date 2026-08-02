@@ -20,16 +20,14 @@ import {
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { KpiCard } from "@/components/ui/KpiCard";
-import { usePositionsQuery } from "@/lib/queries/usePositions";
 import { useUnitsQuery, useBudgetItemsQuery } from "@/lib/queries/useUnits";
 import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { useFutureChangesQuery } from "@/lib/queries/useFutureChanges";
-import { useVacancyReviewsQuery } from "@/lib/queries/useVacancyReviews";
 import { useSystemSettingsQuery } from "@/lib/queries/useSystemSettings";
-import { useAllAuditLogQuery, useAuditLogQuery } from "@/lib/queries/useAuditLog";
+import { useAuditLogQuery } from "@/lib/queries/useAuditLog";
 import { computeUnitStats, round2 } from "@/lib/domain/aggregation";
-import { findEmployeeExceptions, findPositionExceptions } from "@/lib/domain/exceptions";
+import { findEmployeeExceptions, findBudgetItemExceptions } from "@/lib/domain/exceptions";
 import {
   computeActionQueue,
   computeVacancyAgeTiers,
@@ -94,22 +92,19 @@ export default function ControlCenterPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setNow(Date.now()), []);
 
-  const { data: positions = [], isLoading: loadingPositions } = usePositionsQuery();
   const { data: units = [] } = useUnitsQuery();
-  const { data: budgetItems = [] } = useBudgetItemsQuery();
+  const { data: budgetItems = [], isLoading: loadingBudgetItems } = useBudgetItemsQuery();
   const { data: employees = [] } = useEmployeesQuery();
   const { data: assignments = [] } = useAssignmentsQuery();
   const { data: futureChanges = [] } = useFutureChangesQuery();
-  const { data: vacancyReviews = [] } = useVacancyReviewsQuery();
   const { data: settings, isLoading: loadingSettings } = useSystemSettingsQuery();
-  const { data: auditEntriesAscending = [] } = useAllAuditLogQuery();
   const { data: recentAuditEntries = [] } = useAuditLogQuery();
 
   const unitNameById = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
 
   const unitStats = useMemo(
-    () => computeUnitStats(units, budgetItems, positions),
-    [units, budgetItems, positions]
+    () => computeUnitStats(units, budgetItems, assignments),
+    [units, budgetItems, assignments]
   );
   const totals = useMemo(() => {
     const withQuota = unitStats.filter((u) => u.quotaDefined);
@@ -119,74 +114,54 @@ export default function ControlCenterPage() {
     return { allocatedQuota, occupied, occupancyRate };
   }, [unitStats]);
 
-  const positionExceptions = useMemo(
-    () => findPositionExceptions(positions, assignments),
-    [positions, assignments]
+  const budgetItemExceptions = useMemo(
+    () => findBudgetItemExceptions(budgetItems, assignments),
+    [budgetItems, assignments]
   );
   const employeeExceptions = useMemo(() => findEmployeeExceptions(employees), [employees]);
 
   const vacancyAgeTiers = useMemo(
     () =>
-      settings && now !== null
-        ? computeVacancyAgeTiers(positions, auditEntriesAscending, settings.vacancyThresholds, now)
-        : [],
-    [positions, auditEntriesAscending, settings, now]
+      settings && now !== null ? computeVacancyAgeTiers(budgetItems, assignments, settings.vacancyThresholds, now) : [],
+    [budgetItems, assignments, settings, now]
   );
 
   const actionQueue = useMemo(
     () =>
       settings && now !== null
         ? computeActionQueue({
-            positions,
             employees,
             futureChanges,
-            vacancyReviews,
-            positionExceptions,
+            budgetItemExceptions,
             employeeExceptions,
             vacancyAgeTiers,
             settings,
             now,
           })
         : [],
-    [
-      settings,
-      now,
-      positions,
-      employees,
-      futureChanges,
-      vacancyReviews,
-      positionExceptions,
-      employeeExceptions,
-      vacancyAgeTiers,
-    ]
+    [settings, now, employees, futureChanges, budgetItemExceptions, employeeExceptions, vacancyAgeTiers]
   );
 
   const criticalAlerts = useMemo(
     () =>
       computeCriticalAlerts({
-        positions,
-        positionExceptions,
+        budgetItemExceptions,
         employeeExceptions,
         vacancyAgeTiers,
         unitNameById,
       }),
-    [positions, positionExceptions, employeeExceptions, vacancyAgeTiers, unitNameById]
+    [budgetItemExceptions, employeeExceptions, vacancyAgeTiers, unitNameById]
   );
 
   const trends = useMemo(
-    () =>
-      now !== null
-        ? computeTrends({ positions, employees, budgetItems, auditEntriesAscending, now })
-        : [],
-    [positions, employees, budgetItems, auditEntriesAscending, now]
+    () => (now !== null ? computeTrends({ budgetItems, assignments, employees, now }) : []),
+    [budgetItems, assignments, employees, now]
   );
 
   const insights = useMemo(
     () =>
-      now !== null
-        ? computeInsights({ units, positions, budgetItems, auditEntriesAscending, vacancyAgeTiers, trends, now })
-        : [],
-    [units, positions, budgetItems, auditEntriesAscending, vacancyAgeTiers, trends, now]
+      now !== null ? computeInsights({ units, budgetItems, assignments, vacancyAgeTiers, trends, now }) : [],
+    [units, budgetItems, assignments, vacancyAgeTiers, trends, now]
   );
 
   const headcountDelta = useMemo(() => {
@@ -230,13 +205,13 @@ export default function ControlCenterPage() {
       .filter(
         (e) =>
           e.entityType === "assignment" ||
-          (e.entityType === "position" && e.changes.some((c) => c.field === "status")) ||
+          e.entityType === "budgetItem" ||
           (e.entityType === "futureChange" && e.changes.some((c) => c.field === "status" && c.newValue === "בוצע"))
       )
       .slice(0, 6);
   }, [recentAuditEntries]);
 
-  const isLoading = loadingPositions || loadingSettings;
+  const isLoading = loadingBudgetItems || loadingSettings;
   if (isLoading || !settings || now === null) {
     return <div className="p-8 text-sm text-foreground-subtle">טוען...</div>;
   }
@@ -384,21 +359,21 @@ export default function ControlCenterPage() {
         </h2>
         <div className="flex flex-wrap gap-2">
           <button
-            onClick={() => router.push("/positions?tab=employees&new=employee")}
+            onClick={() => router.push("/budget-items?tab=employees&new=employee")}
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-background"
           >
             <Plus size={16} />
             הוספת עובד
           </button>
           <button
-            onClick={() => router.push("/positions?new=position")}
+            onClick={() => router.push("/budget-items?new=budgetItem")}
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-background"
           >
             <Plus size={16} />
-            הוספת תקן
+            הוספת סעיף תקציב
           </button>
           <button
-            onClick={() => router.push("/positions?statusFilter=פנוי")}
+            onClick={() => router.push("/budget-items?onlyVacant=1")}
             className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-background"
           >
             <UserPlus size={16} />

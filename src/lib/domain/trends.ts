@@ -1,7 +1,6 @@
-import type { Position, PositionStatus } from "@/lib/schemas/position";
 import type { Employee } from "@/lib/schemas/employee";
 import type { BudgetItem } from "@/lib/schemas/unit";
-import type { AuditLogEntry } from "@/lib/schemas/auditLog";
+import type { Assignment } from "@/lib/schemas/assignment";
 
 export type TrendPoint = {
   monthKey: string;
@@ -51,62 +50,35 @@ export function monthCutoffs(now: number, months: number) {
   return cutoffs;
 }
 
-export type StatusChange = { changedAt: number; oldValue: PositionStatus };
-
-export function buildStatusChangesByPosition(
-  auditEntriesAscending: AuditLogEntry[]
-): Map<string, StatusChange[]> {
-  const map = new Map<string, StatusChange[]>();
-  for (const entry of auditEntriesAscending) {
-    if (entry.entityType !== "position") continue;
-    for (const change of entry.changes) {
-      if (change.field !== "status") continue;
-      const list = map.get(entry.entityId) ?? [];
-      list.push({ changedAt: entry.changedAt, oldValue: change.oldValue as PositionStatus });
-      map.set(entry.entityId, list);
-    }
-  }
-  return map;
-}
-
-/** Reconstructs what a position's status was at time T by walking forward from its current
- * (known) status and un-applying any status changes that happened after T. Approximation, not
- * a full replay: employmentPercent and budget quotas are treated as constant at their current
- * value throughout the window, since slot-size/budget edits are rare compared to status flips
- * and replaying those too would need a much larger audit-log surface than exists today. */
-export function statusAtTime(
-  position: Position,
-  changesAscending: StatusChange[],
-  t: number
-): PositionStatus | null {
-  if (position.createdAt > t) return null;
-  const firstAfter = changesAscending.find((c) => c.changedAt > t);
-  return firstAfter ? firstAfter.oldValue : position.status;
+/** Was this assignment covering its budget item at time T — computed directly from its own
+ * start/end dates, no audit trail needed (unlike the old Position-status-history approach). */
+export function isAssignmentActiveAt(a: Assignment, t: number): boolean {
+  if (a.startDate !== null && a.startDate > t) return false;
+  return a.endDate === null || a.endDate > t;
 }
 
 export function computeTrends(params: {
-  positions: Position[];
-  employees: Employee[];
   budgetItems: BudgetItem[];
-  auditEntriesAscending: AuditLogEntry[];
+  assignments: Assignment[];
+  employees: Employee[];
   months?: number;
   now?: number;
 }): TrendPoint[] {
-  const { positions, employees, budgetItems, auditEntriesAscending, months = 6, now = Date.now() } = params;
+  const { budgetItems, assignments, employees, months = 6, now = Date.now() } = params;
 
-  const statusChangesByPosition = buildStatusChangesByPosition(auditEntriesAscending);
   const totalAllocatedQuota = budgetItems.reduce((sum, b) => sum + b.allocatedQuota, 0);
   const cutoffs = monthCutoffs(now, months);
 
   return cutoffs.map(({ key, label, ts }) => {
     let occupied = 0;
     let vacantCount = 0;
-    for (const position of positions) {
-      const changes = statusChangesByPosition.get(position.id) ?? [];
-      const statusAtT = statusAtTime(position, changes, ts);
-      if (statusAtT === null) continue;
-      if (statusAtT === "מאויש") occupied += position.employmentPercent ?? 0;
-      if (statusAtT === "פנוי") vacantCount += 1;
+    for (const budgetItem of budgetItems) {
+      if (budgetItem.createdAt > ts) continue;
+      const occupiedAtT = assignments
+        .filter((a) => a.budgetItemId === budgetItem.id && isAssignmentActiveAt(a, ts))
+        .reduce((sum, a) => sum + (a.employmentPercent ?? 0), 0);
+      occupied += occupiedAtT;
+      if (occupiedAtT < budgetItem.allocatedQuota - 0.005) vacantCount += 1;
     }
     const headcount = employees.filter((e) => e.createdAt <= ts).length;
     return {

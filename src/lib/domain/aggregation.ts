@@ -1,207 +1,142 @@
-import type { FundingSource, Position } from "@/lib/schemas/position";
+import type { FundingSource } from "@/lib/schemas/position";
 import type { BudgetItem, Unit } from "@/lib/schemas/unit";
 import type { Assignment } from "@/lib/schemas/assignment";
 import { isActiveAssignment } from "@/lib/schemas/assignment";
 
-export type UnitStats = {
-  unit: Unit;
-  allocatedQuota: number;
-  occupied: number;
-  vacant: number;
-  /** False when the unit has no BudgetItem yet — allocatedQuota is "unset", not genuinely 0,
-   * so vacant/occupied comparisons would be misleading until an admin fills in a real quota. */
-  quotaDefined: boolean;
-  staffCount: number;
-  frozenCount: number;
-};
-
-export function computeUnitStats(
-  units: Unit[],
-  budgetItems: BudgetItem[],
-  positions: Position[]
-): UnitStats[] {
-  // "Occupied" is the physical positions filled in this unit (position.unitId) — a plain
-  // headcount-vs-quota comparison. Now that a position's funding can be split across any number
-  // of free-text budget components (no longer a single budgetItemId per position), there is no
-  // reliable link left between a position and one specific BudgetItem to roll up through, so
-  // routing occupancy via budget-item matching is no longer meaningful.
-  return units
-    .map((unit) => {
-      const unitBudgetItems = budgetItems.filter((b) => b.unitId === unit.id);
-      const allocatedQuota = unitBudgetItems.reduce((sum, b) => sum + b.allocatedQuota, 0);
-      const unitPositions = positions.filter((p) => p.unitId === unit.id);
-      const occupied = unitPositions
-        .filter((p) => p.status === "מאויש")
-        .reduce((sum, p) => sum + (p.employmentPercent ?? 0), 0);
-      return {
-        unit,
-        allocatedQuota,
-        occupied,
-        vacant: allocatedQuota - occupied,
-        quotaDefined: unitBudgetItems.length > 0,
-        staffCount: unitPositions.length,
-        frozenCount: unitPositions.filter((p) => p.status === "מוקפא").length,
-      };
-    })
-    .sort((a, b) => a.unit.order - b.unit.order || a.unit.name.localeCompare(b.unit.name, "he"));
+export function round2(n: number) {
+  return Math.round(n * 100) / 100;
 }
 
 export type BudgetItemStats = {
   budgetItem: BudgetItem;
   occupied: number;
   vacant: number;
-  assignedPositions: Position[];
+  activeAssignments: Assignment[];
+  /** Sum of active assignments' percent exceeds the approved quota. */
+  overCapacity: boolean;
 };
 
-/** How much of a budget item's own quota is actually claimed, matched by its `code` against
- * every position's budgetComponents (free text, not a foreign key — see PositionBudgetComponent)
- * — the only link left between a BudgetItem and the positions funded from it now that a
- * position's own budgetItemId is legacy/unused going forward. */
-export function computeBudgetItemStats(
-  budgetItems: BudgetItem[],
-  positions: Position[]
-): BudgetItemStats[] {
+/** How much of a budget item's approved quota is actually claimed — derived directly from
+ * Assignment records linked to it (`assignment.budgetItemId`), the one and only link between a
+ * BudgetItem and who's assigned to it now that Position is no longer part of this flow. */
+export function computeBudgetItemStats(budgetItems: BudgetItem[], assignments: Assignment[]): BudgetItemStats[] {
   return budgetItems.map((budgetItem) => {
-    const code = budgetItem.code.trim();
-    const assignedPositions = positions.filter((p) =>
-      (p.budgetComponents ?? []).some((c) => c.budgetNumber?.trim() === code)
+    const activeAssignments = assignments.filter(
+      (a) => a.budgetItemId === budgetItem.id && isActiveAssignment(a)
     );
-    const occupied = assignedPositions.reduce((sum, p) => {
-      if (p.status !== "מאויש") return sum;
-      const component = (p.budgetComponents ?? []).find((c) => c.budgetNumber?.trim() === code);
-      return sum + (component?.percent ?? 0);
-    }, 0);
+    const occupied = activeAssignments.reduce((sum, a) => sum + (a.employmentPercent ?? 0), 0);
     return {
       budgetItem,
-      occupied,
-      vacant: budgetItem.allocatedQuota - occupied,
-      assignedPositions,
+      occupied: round2(occupied),
+      vacant: round2(budgetItem.allocatedQuota - occupied),
+      activeAssignments,
+      overCapacity: occupied - budgetItem.allocatedQuota > 0.005,
     };
   });
 }
 
-export function round2(n: number) {
-  return Math.round(n * 100) / 100;
-}
-
-export type PositionsSummary = {
-  total: number;
+export type UnitStats = {
+  unit: Unit;
+  allocatedQuota: number;
   occupied: number;
   vacant: number;
-  /** מאויש but the active assignment's own percent is smaller than the slot's — there's still
-   * room on this exact position for another partial hire. */
-  partiallyFilled: number;
+  /** False when the unit has no BudgetItem yet — allocatedQuota is "unset", not genuinely 0. */
+  quotaDefined: boolean;
+  budgetItemCount: number;
+};
+
+export function computeUnitStats(units: Unit[], budgetItems: BudgetItem[], assignments: Assignment[]): UnitStats[] {
+  const itemStats = computeBudgetItemStats(budgetItems, assignments);
+  return units
+    .map((unit) => {
+      const unitItemStats = itemStats.filter((s) => s.budgetItem.unitId === unit.id);
+      const allocatedQuota = unitItemStats.reduce((sum, s) => sum + s.budgetItem.allocatedQuota, 0);
+      const occupied = unitItemStats.reduce((sum, s) => sum + s.occupied, 0);
+      return {
+        unit,
+        allocatedQuota: round2(allocatedQuota),
+        occupied: round2(occupied),
+        vacant: round2(allocatedQuota - occupied),
+        quotaDefined: unitItemStats.length > 0,
+        budgetItemCount: unitItemStats.length,
+      };
+    })
+    .sort((a, b) => a.unit.order - b.unit.order || a.unit.name.localeCompare(b.unit.name, "he"));
+}
+
+export type BudgetItemsSummary = {
+  total: number;
+  fullyOccupied: number;
+  vacant: number;
+  overCapacity: number;
   occupancyRate: number;
 };
 
-export function computePositionsSummary(positions: Position[], assignments: Assignment[]): PositionsSummary {
-  const activeByPositionId = new Map<string, Assignment>();
-  for (const a of assignments) {
-    if (isActiveAssignment(a)) activeByPositionId.set(a.positionId, a);
-  }
-
-  let occupied = 0;
+export function computeBudgetItemsSummary(budgetItems: BudgetItem[], assignments: Assignment[]): BudgetItemsSummary {
+  const stats = computeBudgetItemStats(budgetItems, assignments);
+  let fullyOccupied = 0;
   let vacant = 0;
-  let partiallyFilled = 0;
-  for (const p of positions) {
-    if (p.status === "מאויש") {
-      occupied += 1;
-      const assignment = activeByPositionId.get(p.id);
-      if (
-        assignment &&
-        p.employmentPercent !== null &&
-        assignment.employmentPercent !== null &&
-        assignment.employmentPercent < p.employmentPercent
-      ) {
-        partiallyFilled += 1;
-      }
-    } else if (p.status === "פנוי") {
-      vacant += 1;
-    }
+  let overCapacity = 0;
+  let totalQuota = 0;
+  let totalOccupied = 0;
+  for (const s of stats) {
+    totalQuota += s.budgetItem.allocatedQuota;
+    totalOccupied += s.occupied;
+    if (s.overCapacity) overCapacity += 1;
+    else if (s.vacant <= 0.005) fullyOccupied += 1;
+    else if (s.occupied <= 0.005) vacant += 1;
   }
-
-  const total = positions.length;
   return {
-    total,
-    occupied,
+    total: budgetItems.length,
+    fullyOccupied,
     vacant,
-    partiallyFilled,
-    occupancyRate: total > 0 ? Math.round((occupied / total) * 100) : 0,
+    overCapacity,
+    occupancyRate: totalQuota > 0 ? Math.round((totalOccupied / totalQuota) * 100) : 0,
   };
-}
-
-export type PositionVacancy = {
-  /** The position's own slot size (employmentPercent), 0 when undefined. */
-  total: number;
-  /** The active assignment's percent, 0 when there's none. */
-  filled: number;
-  /** How much of the position's own slot is still unclaimed. */
-  remaining: number;
-};
-
-export function computePositionVacancy(position: Position, assignment: Assignment | null): PositionVacancy {
-  const total = position.employmentPercent ?? 0;
-  const filled = assignment?.employmentPercent ?? 0;
-  return { total, filled, remaining: Math.max(0, total - filled) };
 }
 
 export type FundingSourceSummary = {
   fundingSource: FundingSource;
-  totalPercent: number;
-  occupiedPercent: number;
-  vacantPercent: number;
-  positions: Position[];
+  totalQuota: number;
+  occupied: number;
+  vacant: number;
+  budgetItems: BudgetItem[];
   employeeCount: number;
 };
 
-/** Financial summary screen ("מקורות תקציב") — purely derived from positions' own
- * budgetComponents, grouped by funding-source category. A position contributes to every
- * category it has a component in, so its percent can appear under more than one source. */
+/** Financial summary screen ("מקורות תקציב") — grouped by each budget item's own single
+ * fundingSource field (unlike the old model, a budget item has exactly one funding source, so
+ * there's no double-counting to worry about). */
 export function computeFundingSourceSummary(
-  positions: Position[],
+  budgetItems: BudgetItem[],
   assignments: Assignment[]
 ): FundingSourceSummary[] {
-  const activeByPositionId = new Map<string, Assignment>();
-  for (const a of assignments) {
-    if (isActiveAssignment(a)) activeByPositionId.set(a.positionId, a);
-  }
-
-  type Bucket = {
-    totalPercent: number;
-    occupiedPercent: number;
-    vacantPercent: number;
-    positionIds: Set<string>;
-    employeeIds: Set<string>;
-  };
+  const itemStats = computeBudgetItemStats(budgetItems, assignments);
+  type Bucket = { totalQuota: number; occupied: number; items: BudgetItem[]; employeeIds: Set<string> };
   const bySource = new Map<FundingSource, Bucket>();
 
-  for (const p of positions) {
-    for (const component of p.budgetComponents ?? []) {
-      const bucket = bySource.get(component.fundingSource) ?? {
-        totalPercent: 0,
-        occupiedPercent: 0,
-        vacantPercent: 0,
-        positionIds: new Set<string>(),
-        employeeIds: new Set<string>(),
-      };
-      bucket.totalPercent += component.percent;
-      if (p.status === "מאויש") bucket.occupiedPercent += component.percent;
-      else if (p.status === "פנוי") bucket.vacantPercent += component.percent;
-      bucket.positionIds.add(p.id);
-      const assignment = activeByPositionId.get(p.id);
-      if (assignment) bucket.employeeIds.add(assignment.employeeId);
-      bySource.set(component.fundingSource, bucket);
-    }
+  for (const stat of itemStats) {
+    const bucket = bySource.get(stat.budgetItem.fundingSource) ?? {
+      totalQuota: 0,
+      occupied: 0,
+      items: [],
+      employeeIds: new Set<string>(),
+    };
+    bucket.totalQuota += stat.budgetItem.allocatedQuota;
+    bucket.occupied += stat.occupied;
+    bucket.items.push(stat.budgetItem);
+    for (const a of stat.activeAssignments) bucket.employeeIds.add(a.employeeId);
+    bySource.set(stat.budgetItem.fundingSource, bucket);
   }
 
   return [...bySource.entries()]
     .map(([fundingSource, bucket]) => ({
       fundingSource,
-      totalPercent: round2(bucket.totalPercent),
-      occupiedPercent: round2(bucket.occupiedPercent),
-      vacantPercent: round2(bucket.vacantPercent),
-      positions: positions.filter((p) => bucket.positionIds.has(p.id)),
+      totalQuota: round2(bucket.totalQuota),
+      occupied: round2(bucket.occupied),
+      vacant: round2(bucket.totalQuota - bucket.occupied),
+      budgetItems: bucket.items,
       employeeCount: bucket.employeeIds.size,
     }))
-    .sort((a, b) => b.totalPercent - a.totalPercent);
+    .sort((a, b) => b.totalQuota - a.totalQuota);
 }

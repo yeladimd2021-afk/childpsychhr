@@ -1,10 +1,10 @@
-import type { Position } from "@/lib/schemas/position";
+import type { BudgetItem } from "@/lib/schemas/unit";
+import type { Assignment } from "@/lib/schemas/assignment";
 import type { Employee } from "@/lib/schemas/employee";
 import type { FutureChange } from "@/lib/schemas/futureChange";
-import type { VacancyReview } from "@/lib/schemas/vacancyReview";
-import type { AuditLogEntry } from "@/lib/schemas/auditLog";
 import type { SystemSettings } from "@/lib/schemas/systemSettings";
-import type { PositionException, EmployeeException } from "@/lib/domain/exceptions";
+import type { BudgetItemException, EmployeeException } from "@/lib/domain/exceptions";
+import { computeBudgetItemStats } from "@/lib/domain/aggregation";
 
 export type ActionSeverity = "red" | "orange" | "yellow" | "blue";
 
@@ -17,46 +17,44 @@ export type ActionItem = {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The last time a position flipped to פנוי, per the audit trail — falls back to its
- * creation time if it has been vacant since it was created (no recorded status change). */
-export function getVacantSince(position: Position, auditEntriesAscending: AuditLogEntry[]): number {
-  let latest = position.createdAt;
-  for (const entry of auditEntriesAscending) {
-    if (entry.entityType !== "position" || entry.entityId !== position.id) continue;
-    for (const change of entry.changes) {
-      if (change.field === "status" && change.newValue === "פנוי") {
-        latest = entry.changedAt;
-      }
-    }
-  }
-  return latest;
+/** The last time a budget item's assignment ended (if any), or its creation time if it has
+ * been vacant/never fully filled since it was created — no audit trail needed, since
+ * Assignment already carries its own start/end dates. */
+export function getVacantSince(budgetItem: BudgetItem, assignments: Assignment[]): number {
+  const endedDates = assignments
+    .filter((a) => a.budgetItemId === budgetItem.id && a.endDate !== null)
+    .map((a) => a.endDate as number);
+  if (endedDates.length === 0) return budgetItem.createdAt;
+  return Math.max(...endedDates);
 }
 
 export type VacancyAgeTier = {
-  position: Position;
+  budgetItem: BudgetItem;
   daysVacant: number;
   severity: ActionSeverity;
 };
 
-/** Buckets every currently-vacant position by how long it's been vacant, per the configurable
- * thresholds in SystemSettings — this is the one calculation both the action queue and the
- * critical-alerts section key off of, so they always agree with each other. */
+/** Buckets every budget item with remaining vacant capacity by how long it's been that way,
+ * per the configurable thresholds in SystemSettings — this is the one calculation both the
+ * action queue and the critical-alerts section key off of, so they always agree with each
+ * other. */
 export function computeVacancyAgeTiers(
-  positions: Position[],
-  auditEntriesAscending: AuditLogEntry[],
+  budgetItems: BudgetItem[],
+  assignments: Assignment[],
   thresholds: SystemSettings["vacancyThresholds"],
   now: number = Date.now()
 ): VacancyAgeTier[] {
-  return positions
-    .filter((p) => p.status === "פנוי")
-    .map((position) => {
-      const vacantSince = getVacantSince(position, auditEntriesAscending);
+  const stats = computeBudgetItemStats(budgetItems, assignments);
+  return stats
+    .filter((s) => s.vacant > 0.005)
+    .map((s) => {
+      const vacantSince = getVacantSince(s.budgetItem, assignments);
       const daysVacant = Math.floor((now - vacantSince) / DAY_MS);
       let severity: ActionSeverity = "blue";
       if (daysVacant >= thresholds.redDays) severity = "red";
       else if (daysVacant >= thresholds.orangeDays) severity = "orange";
       else if (daysVacant >= thresholds.yellowDays) severity = "yellow";
-      return { position, daysVacant, severity };
+      return { budgetItem: s.budgetItem, daysVacant, severity };
     })
     .sort((a, b) => b.daysVacant - a.daysVacant);
 }
@@ -68,29 +66,20 @@ const SEVERITY_LABEL: Record<Exclude<ActionSeverity, "blue">, string> = {
 };
 
 export function computeActionQueue(params: {
-  positions: Position[];
   employees: Employee[];
   futureChanges: FutureChange[];
-  vacancyReviews: VacancyReview[];
-  positionExceptions: PositionException[];
+  budgetItemExceptions: BudgetItemException[];
   employeeExceptions: EmployeeException[];
   vacancyAgeTiers: VacancyAgeTier[];
   settings: SystemSettings;
   now?: number;
 }): ActionItem[] {
-  const {
-    futureChanges,
-    vacancyReviews,
-    positionExceptions,
-    employeeExceptions,
-    vacancyAgeTiers,
-    settings,
-    now = Date.now(),
-  } = params;
+  const { futureChanges, budgetItemExceptions, employeeExceptions, vacancyAgeTiers, settings, now = Date.now() } =
+    params;
 
   const items: ActionItem[] = [];
 
-  const exceptionCount = positionExceptions.length + employeeExceptions.length;
+  const exceptionCount = budgetItemExceptions.length + employeeExceptions.length;
   if (exceptionCount > 0) {
     items.push({
       id: "exceptions",
@@ -106,7 +95,7 @@ export function computeActionQueue(params: {
       items.push({
         id: `vacancy-${severity}`,
         severity,
-        title: `${count} תקנים פנויים — ${SEVERITY_LABEL[severity]}`,
+        title: `${count} סעיפי תקציב עם יתרה פנויה — ${SEVERITY_LABEL[severity]}`,
         href: "/reports",
       });
     }
@@ -132,20 +121,6 @@ export function computeActionQueue(params: {
       severity: "orange",
       title: `${urgentLeaving.length} עובדים עוזבים תוך ${settings.leavingWindows.urgentDays} ימים`,
       href: "/changes",
-    });
-  }
-
-  const staleReviews = vacancyReviews.filter(
-    (r) =>
-      (r.status === "לבדיקה" || r.status === "בתהליך") &&
-      (now - r.updatedAt) / DAY_MS >= settings.leavingWindows.urgentDays
-  );
-  if (staleReviews.length > 0) {
-    items.push({
-      id: "stale-reviews",
-      severity: "yellow",
-      title: `${staleReviews.length} סעיפי תקציב בבדיקה מעל ${settings.leavingWindows.urgentDays} ימים`,
-      href: "/vacancies",
     });
   }
 
