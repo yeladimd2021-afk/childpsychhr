@@ -12,7 +12,7 @@ import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { computeBudgetItemStats, computeBudgetItemsSummary, round2 } from "@/lib/domain/aggregation";
 import { isActiveAssignment, type Assignment } from "@/lib/schemas/assignment";
-import { formatEmployeeName } from "@/lib/schemas/employee";
+import { employeeSectorSchema, formatEmployeeName } from "@/lib/schemas/employee";
 import type { Employee } from "@/lib/schemas/employee";
 import { BudgetItemCard } from "@/components/budgetItems/BudgetItemCard";
 import { BudgetItemFormModal } from "@/components/units/BudgetItemFormModal";
@@ -40,6 +40,7 @@ export default function BudgetItemsPage() {
   const [sourceFilter, setSourceFilter] = useState("");
   const [onlyVacant, setOnlyVacant] = useState(false);
   const [employeeUnitFilter, setEmployeeUnitFilter] = useState("");
+  const [employeeSectorFilter, setEmployeeSectorFilter] = useState("");
 
   const [showCreateBudgetItem, setShowCreateBudgetItem] = useState(false);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
@@ -122,14 +123,10 @@ export default function BudgetItemsPage() {
       const q = search.trim();
       result = result.filter((e) => formatEmployeeName(e).includes(q) || (e.idNumber ?? "").includes(q));
     }
-    if (employeeUnitFilter) {
-      result = result.filter((e) => {
-        const employeeAssignments = activeAssignmentsByEmployeeId.get(e.id) ?? [];
-        return employeeAssignments.some((a) => budgetItemById.get(a.budgetItemId ?? "")?.unitId === employeeUnitFilter);
-      });
-    }
+    if (employeeUnitFilter) result = result.filter((e) => e.actualUnitId === employeeUnitFilter);
+    if (employeeSectorFilter) result = result.filter((e) => e.sector === employeeSectorFilter);
     return result;
-  }, [employees, search, employeeUnitFilter, activeAssignmentsByEmployeeId, budgetItemById]);
+  }, [employees, search, employeeUnitFilter, employeeSectorFilter]);
 
   // One row per active assignment (a row-per-employee table hides multiple assignments in a
   // nested list, which isn't scannable) — an unassigned employee still gets exactly one row.
@@ -285,18 +282,31 @@ export default function BudgetItemsPage() {
                 onChange={(e) => setEmployeeUnitFilter(e.target.value)}
                 className="rounded-lg border border-border px-3 py-2 text-sm"
               >
-                <option value="">כל היחידות</option>
+                <option value="">כל המחלקות</option>
                 {units.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
                   </option>
                 ))}
               </select>
-              {(employeeUnitFilter || search) && (
+              <select
+                value={employeeSectorFilter}
+                onChange={(e) => setEmployeeSectorFilter(e.target.value)}
+                className="rounded-lg border border-border px-3 py-2 text-sm"
+              >
+                <option value="">כל הסקטורים</option>
+                {employeeSectorSchema.options.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+              {(employeeUnitFilter || employeeSectorFilter || search) && (
                 <button
                   type="button"
                   onClick={() => {
                     setEmployeeUnitFilter("");
+                    setEmployeeSectorFilter("");
                     setSearch("");
                   }}
                   className="rounded-lg px-3 py-2 text-sm font-medium text-brand-blue hover:underline"
@@ -327,12 +337,15 @@ export default function BudgetItemsPage() {
           )}
         </div>
       ) : (
-        <Card className="max-h-[70vh] overflow-y-auto p-0">
+        <Card className="max-h-[70vh] overflow-x-auto overflow-y-auto p-0">
           <table className="w-full text-sm">
             <thead className="sticky top-0 z-10 bg-surface text-xs text-foreground-subtle shadow-[0_1px_0_0_var(--color-border)]">
               <tr>
                 <th className="px-3 py-3 text-right">שם מלא</th>
                 <th className="px-3 py-3 text-right">ת.ז.</th>
+                <th className="px-3 py-3 text-right">מחלקה</th>
+                <th className="px-3 py-3 text-right">תפקיד</th>
+                <th className="px-3 py-3 text-right">סקטור</th>
                 <th className="px-3 py-3 text-right">קרן / מדינה</th>
                 <th className="px-3 py-3 text-right">סעיף תקציב</th>
                 <th className="px-3 py-3 text-right">אחוזי משרה</th>
@@ -341,6 +354,7 @@ export default function BudgetItemsPage() {
             <tbody>
               {employeeRows.map(({ employee: emp, assignment: a }, i) => {
                 const budgetItem = a?.budgetItemId ? budgetItemById.get(a.budgetItemId) : undefined;
+                const isFirstRowForEmployee = i === 0 || employeeRows[i - 1].employee.id !== emp.id;
                 return (
                   <tr
                     key={a ? a.id : `${emp.id}-empty`}
@@ -349,12 +363,15 @@ export default function BudgetItemsPage() {
                       i > 0 && employeeRows[i - 1].employee.id === emp.id ? "border-t-0" : ""
                     }`}
                   >
-                    <td className="px-3 py-3 font-medium">
-                      {i === 0 || employeeRows[i - 1].employee.id !== emp.id ? formatEmployeeName(emp) : ""}
-                    </td>
+                    <td className="px-3 py-3 font-medium">{isFirstRowForEmployee ? formatEmployeeName(emp) : ""}</td>
                     <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
-                      {i === 0 || employeeRows[i - 1].employee.id !== emp.id ? (emp.idNumber ?? "—") : ""}
+                      {isFirstRowForEmployee ? (emp.idNumber ?? "—") : ""}
                     </td>
+                    <td className="px-3 py-3">
+                      {isFirstRowForEmployee ? (emp.actualUnitId ? (unitNameById.get(emp.actualUnitId) ?? "—") : "—") : ""}
+                    </td>
+                    <td className="px-3 py-3">{isFirstRowForEmployee ? (emp.actualRole ?? "—") : ""}</td>
+                    <td className="px-3 py-3">{isFirstRowForEmployee ? (emp.sector ?? "—") : ""}</td>
                     <td className="px-3 py-3">{budgetItem ? budgetItem.fundingSource : "—"}</td>
                     <td className="px-3 py-3">
                       {budgetItem ? (
@@ -375,7 +392,7 @@ export default function BudgetItemsPage() {
               })}
               {employeeRows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-8 text-center text-foreground-subtle">
+                  <td colSpan={8} className="px-3 py-8 text-center text-foreground-subtle">
                     לא נמצאו עובדים תואמים
                   </td>
                 </tr>
