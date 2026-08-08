@@ -168,13 +168,16 @@ export function useUpdateAssignmentMutation() {
       const changedBy = user?.uid ?? "unknown";
       const changedByName = profile?.displayName ?? "unknown";
 
-      await updateDocById(COLLECTION, id, { ...values, updatedAt: now });
+      // Firestore's updateDoc() rejects an explicit `undefined` field value (unlike a missing
+      // key) — normalize before writing, not just for the diff.
+      const notes = values.notes ?? "";
+      await updateDocById(COLLECTION, id, { ...values, notes, updatedAt: now });
       await recordHistoryEntry({
         entityType: "assignment",
         entityId: id,
         entityLabel: `${employeeLabel} → ${budgetItemLabel(budgetItem)}`,
         action: "update",
-        changes: diffFields(before, { ...values, notes: values.notes ?? "" }),
+        changes: diffFields(before, { ...values, notes }),
         changedBy,
         changedByName,
       });

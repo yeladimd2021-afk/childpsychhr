@@ -13,6 +13,17 @@ import {
 
 /** Thin Firestore/demo-store switch so query hooks don't each need their own isDemoMode branch. */
 
+/** Firestore rejects an explicit `undefined` field value (unlike an absent key) — several
+ * call sites build values with `field ?? undefined` meaning "don't set this," so strip those
+ * keys out before every write rather than fixing each call site individually. */
+function stripUndefined(data: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) result[key] = value;
+  }
+  return result;
+}
+
 export async function listDocs<T>(collectionName: string): Promise<(T & { id: string })[]> {
   if (isDemoMode) return demoList(collectionName) as (T & { id: string })[];
   const snapshot = await getDocs(collection(db!, collectionName));
@@ -39,8 +50,9 @@ export async function createDoc(
   collectionName: string,
   data: Record<string, unknown>
 ): Promise<string> {
-  if (isDemoMode) return demoCreate(collectionName, data);
-  const ref = await addDoc(collection(db!, collectionName), data);
+  const clean = stripUndefined(data);
+  if (isDemoMode) return demoCreate(collectionName, clean);
+  const ref = await addDoc(collection(db!, collectionName), clean);
   return ref.id;
 }
 
@@ -49,11 +61,12 @@ export async function updateDocById(
   id: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  const clean = stripUndefined(data);
   if (isDemoMode) {
-    demoUpdate(collectionName, id, data);
+    demoUpdate(collectionName, id, clean);
     return;
   }
-  await updateDoc(doc(db!, collectionName, id), data);
+  await updateDoc(doc(db!, collectionName, id), clean);
 }
 
 /** True hard delete — unlike every other write in this app, there is no way to undo this.
@@ -71,9 +84,10 @@ export async function setDocById(
   id: string,
   data: Record<string, unknown>
 ): Promise<void> {
+  const clean = stripUndefined(data);
   if (isDemoMode) {
-    demoSet(collectionName, id, data);
+    demoSet(collectionName, id, clean);
     return;
   }
-  await setDoc(doc(db!, collectionName, id), data);
+  await setDoc(doc(db!, collectionName, id), clean);
 }
