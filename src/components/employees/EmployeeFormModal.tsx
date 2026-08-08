@@ -1,11 +1,18 @@
 "use client";
 
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Modal } from "@/components/ui/Modal";
-import { employeeFormSchema, type Employee, type EmployeeFormValues } from "@/lib/schemas/employee";
+import {
+  ACTUAL_ROLE_OPTIONS,
+  employeeFormSchema,
+  type Employee,
+  type EmployeeFormValues,
+} from "@/lib/schemas/employee";
 import { useCreateEmployeeMutation, useUpdateEmployeeMutation } from "@/lib/queries/useEmployees";
 import type { Unit } from "@/lib/schemas/unit";
+
+const SECTOR_OPTIONS = ["רופאים", "מנהל ומשק", "פרא-מקצועות הבריאות"] as const;
 
 export function EmployeeFormModal({
   employee,
@@ -24,6 +31,7 @@ export function EmployeeFormModal({
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors },
   } = useForm<EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
@@ -33,6 +41,7 @@ export function EmployeeFormModal({
           phone: employee.phone ?? null,
           actualUnitId: employee.actualUnitId ?? null,
           actualRole: employee.actualRole ?? null,
+          sector: employee.sector ?? null,
         }
       : {
           firstName: "",
@@ -41,10 +50,17 @@ export function EmployeeFormModal({
           phone: null,
           actualUnitId: null,
           actualRole: null,
+          sector: null,
           source: "ידני",
           notes: "",
         },
   });
+
+  const currentActualRole = employee?.actualRole ?? null;
+  const actualRoleOptions =
+    currentActualRole && !(ACTUAL_ROLE_OPTIONS as readonly string[]).includes(currentActualRole)
+      ? [currentActualRole, ...ACTUAL_ROLE_OPTIONS]
+      : ACTUAL_ROLE_OPTIONS;
 
   async function onSubmit(values: EmployeeFormValues) {
     if (employee) {
@@ -111,7 +127,7 @@ export function EmployeeFormModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="mb-1 block text-sm font-medium">מחלקה/מרפאה בפועל</label>
+              <label className="mb-1 block text-sm font-medium">מחלקה</label>
               <select
                 {...register("actualUnitId")}
                 className="w-full rounded-lg border border-border px-3 py-2 text-sm"
@@ -128,12 +144,43 @@ export function EmployeeFormModal({
               </p>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">תפקיד בפועל</label>
-              <input
+              <label className="mb-1 block text-sm font-medium">תפקיד</label>
+              <select
                 {...register("actualRole")}
                 className="w-full rounded-lg border border-border px-3 py-2 text-sm"
-              />
+              >
+                <option value="">— ללא —</option>
+                {actualRoleOptions.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </select>
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium">סקטור</label>
+            <Controller
+              control={control}
+              name="sector"
+              render={({ field }) => (
+                <select
+                  value={field.value ?? ""}
+                  onChange={(e) => field.onChange(e.target.value === "" ? null : e.target.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  className="w-full max-w-[50%] rounded-lg border border-border px-3 py-2 text-sm"
+                >
+                  <option value="">— ללא —</option>
+                  {SECTOR_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              )}
+            />
           </div>
 
           <div>

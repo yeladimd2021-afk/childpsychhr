@@ -73,6 +73,7 @@ export function AssignToBudgetItemModal({
                   phone: null,
                   actualUnitId: null,
                   actualRole: null,
+                  sector: null,
                   source: "ידני",
                   notes: undefined,
                 },

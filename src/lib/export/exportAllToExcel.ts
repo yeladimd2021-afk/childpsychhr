@@ -80,8 +80,9 @@ export async function exportAllToExcel() {
       { header: "שם משפחה", key: "lastName", width: 15 },
       { header: "תעודת זהות", key: "idNumber", width: 14 },
       { header: "טלפון", key: "phone", width: 14 },
-      { header: "מחלקה בפועל", key: "actualUnit", width: 20 },
-      { header: "תפקיד בפועל", key: "actualRole", width: 18 },
+      { header: "מחלקה", key: "actualUnit", width: 20 },
+      { header: "תפקיד", key: "actualRole", width: 18 },
+      { header: "סקטור", key: "sector", width: 16 },
       { header: "הערות", key: "notes", width: 30 },
     ],
     employees.map((e) => ({
@@ -91,6 +92,7 @@ export async function exportAllToExcel() {
       phone: e.phone ?? "",
       actualUnit: e.actualUnitId ? (unitNameById.get(e.actualUnitId) ?? "") : "",
       actualRole: e.actualRole ?? "",
+      sector: e.sector ?? "",
       notes: e.notes ?? "",
     }))
   );
