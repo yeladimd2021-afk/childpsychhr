@@ -12,7 +12,7 @@ import { useEmployeesQuery } from "@/lib/queries/useEmployees";
 import { useAssignmentsQuery } from "@/lib/queries/useAssignments";
 import { computeBudgetItemStats, computeBudgetItemsSummary, round2 } from "@/lib/domain/aggregation";
 import { isActiveAssignment, type Assignment } from "@/lib/schemas/assignment";
-import { employeeSectorSchema, formatEmployeeName } from "@/lib/schemas/employee";
+import { employeeSectorSchema, formatEmployeeName, isEmployeeActive } from "@/lib/schemas/employee";
 import type { Employee } from "@/lib/schemas/employee";
 import { BudgetItemCard } from "@/components/budgetItems/BudgetItemCard";
 import { BudgetItemFormModal } from "@/components/units/BudgetItemFormModal";
@@ -41,6 +41,7 @@ export default function BudgetItemsPage() {
   const [onlyVacant, setOnlyVacant] = useState(false);
   const [employeeUnitFilter, setEmployeeUnitFilter] = useState("");
   const [employeeSectorFilter, setEmployeeSectorFilter] = useState("");
+  const [showInactiveEmployees, setShowInactiveEmployees] = useState(false);
 
   const [showCreateBudgetItem, setShowCreateBudgetItem] = useState(false);
   const [showCreateEmployee, setShowCreateEmployee] = useState(false);
@@ -125,8 +126,9 @@ export default function BudgetItemsPage() {
     }
     if (employeeUnitFilter) result = result.filter((e) => e.actualUnitId === employeeUnitFilter);
     if (employeeSectorFilter) result = result.filter((e) => e.sector === employeeSectorFilter);
+    if (!showInactiveEmployees) result = result.filter((e) => isEmployeeActive(e));
     return result;
-  }, [employees, search, employeeUnitFilter, employeeSectorFilter]);
+  }, [employees, search, employeeUnitFilter, employeeSectorFilter, showInactiveEmployees]);
 
   // One row per active assignment (a row-per-employee table hides multiple assignments in a
   // nested list, which isn't scannable) — an unassigned employee still gets exactly one row.
@@ -301,12 +303,21 @@ export default function BudgetItemsPage() {
                   </option>
                 ))}
               </select>
-              {(employeeUnitFilter || employeeSectorFilter || search) && (
+              <label className="flex items-center gap-1.5 text-sm">
+                <input
+                  type="checkbox"
+                  checked={showInactiveEmployees}
+                  onChange={(e) => setShowInactiveEmployees(e.target.checked)}
+                />
+                הצג גם לא פעילים
+              </label>
+              {(employeeUnitFilter || employeeSectorFilter || showInactiveEmployees || search) && (
                 <button
                   type="button"
                   onClick={() => {
                     setEmployeeUnitFilter("");
                     setEmployeeSectorFilter("");
+                    setShowInactiveEmployees(false);
                     setSearch("");
                   }}
                   className="rounded-lg px-3 py-2 text-sm font-medium text-brand-blue hover:underline"
@@ -363,7 +374,16 @@ export default function BudgetItemsPage() {
                       i > 0 && employeeRows[i - 1].employee.id === emp.id ? "border-t-0" : ""
                     }`}
                   >
-                    <td className="px-3 py-3 font-medium">{isFirstRowForEmployee ? formatEmployeeName(emp) : ""}</td>
+                    <td className="px-3 py-3 font-medium">
+                      {isFirstRowForEmployee ? (
+                        <span className="flex items-center gap-2">
+                          {formatEmployeeName(emp)}
+                          {!isEmployeeActive(emp) && <Badge tone="neutral">לא פעיל/ה</Badge>}
+                        </span>
+                      ) : (
+                        ""
+                      )}
+                    </td>
                     <td dir="ltr" className="px-3 py-3 text-left text-foreground-subtle">
                       {isFirstRowForEmployee ? (emp.idNumber ?? "—") : ""}
                     </td>
@@ -412,6 +432,7 @@ export default function BudgetItemsPage() {
         <EmployeeFormModal
           employee={editingEmployee}
           units={units}
+          activeAssignments={activeAssignmentsByEmployeeId.get(editingEmployee.id) ?? []}
           onClose={() => setEditingEmployee(null)}
           readOnly={!editAllowed}
         />

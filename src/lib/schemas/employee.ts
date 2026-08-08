@@ -53,6 +53,9 @@ export const employeeSchema = z.object({
   /** Professional division — independent of actualUnitId (a department like "אגף" can contain
    * people from more than one sector). */
   sector: employeeSectorSchema.nullable(),
+  /** False once the person has left — kept (never deleted) for history. Missing on records
+   * written before this field existed; treat that the same as `true` (see isEmployeeActive). */
+  active: z.boolean(),
   source: positionSourceSchema,
   notes: z.string().optional(),
   createdAt: z.number(),
@@ -70,4 +73,10 @@ export type EmployeeFormValues = z.infer<typeof employeeFormSchema>;
 export function formatEmployeeName(e: { firstName: string; lastName: string } | null | undefined) {
   if (!e) return "(לא משויך)";
   return `${e.firstName} ${e.lastName}`;
+}
+
+/** Records written before `active` existed have no such field at all (reads via listDocs are
+ * not Zod-validated) — treat that the same as `active: true`, never as inactive. */
+export function isEmployeeActive(e: Pick<Employee, "active">) {
+  return e.active !== false;
 }

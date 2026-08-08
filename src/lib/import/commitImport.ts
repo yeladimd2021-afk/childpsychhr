@@ -89,6 +89,7 @@ export async function commitImportedPositions(params: {
         actualUnitId: null,
         actualRole: null,
         sector: null,
+        active: true,
         source: "ייבוא",
         notes: undefined,
       };

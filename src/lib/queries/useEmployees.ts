@@ -36,6 +36,59 @@ export function useCreateEmployeeMutation() {
   });
 }
 
+/** Marks an employee as having left (or brings them back). Deactivating also ends every
+ * currently-active assignment of theirs, so budget items they held stop looking occupied — the
+ * employee record itself is never deleted, only flagged. */
+export function useSetEmployeeActiveMutation() {
+  const queryClient = useQueryClient();
+  const { user, profile } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      employee,
+      active,
+      activeAssignmentIds,
+    }: {
+      employee: Employee;
+      active: boolean;
+      activeAssignmentIds: string[];
+    }) => {
+      const now = Date.now();
+      const changedBy = user?.uid ?? "unknown";
+      const changedByName = profile?.displayName ?? "unknown";
+
+      await updateDocById(COLLECTION, employee.id, { active, updatedAt: now });
+      await recordHistoryEntry({
+        entityType: "employee",
+        entityId: employee.id,
+        entityLabel: formatEmployeeName(employee),
+        action: "update",
+        changes: [{ field: "active", oldValue: employee.active ?? true, newValue: active }],
+        changedBy,
+        changedByName,
+      });
+
+      if (!active) {
+        for (const assignmentId of activeAssignmentIds) {
+          await updateDocById("assignments", assignmentId, { endDate: now, updatedAt: now });
+          await recordHistoryEntry({
+            entityType: "assignment",
+            entityId: assignmentId,
+            entityLabel: `${formatEmployeeName(employee)} — עזיבה`,
+            action: "update",
+            changes: [{ field: "endDate", oldValue: null, newValue: now }],
+            changedBy,
+            changedByName,
+          });
+        }
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [COLLECTION] });
+      queryClient.invalidateQueries({ queryKey: ["assignments"] });
+    },
+  });
+}
+
 export function useUpdateEmployeeMutation() {
   const queryClient = useQueryClient();
   const { user, profile } = useAuth();

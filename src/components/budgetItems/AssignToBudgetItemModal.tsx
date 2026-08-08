@@ -74,6 +74,7 @@ export function AssignToBudgetItemModal({
                   actualUnitId: null,
                   actualRole: null,
                   sector: null,
+                  active: true,
                   source: "ידני",
                   notes: undefined,
                 },
